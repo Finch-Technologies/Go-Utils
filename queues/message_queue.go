@@ -99,3 +99,12 @@ func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.D
 
 	return payloads, nil
 }
+
+func Delete(ctx context.Context, queue Queue, message string) error {
+
+	if mq == nil {
+		return fmt.Errorf("no message queue driver found")
+	}
+
+	return mq.Delete(ctx, string(queue), message)
+}
