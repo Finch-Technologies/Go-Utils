@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -103,7 +104,7 @@ func getDequeueOptions(options []types.DequeueOptions) types.DequeueOptions {
 }
 
 // Dequeue receives a message from the specified queue and deletes it after processing.
-func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options ...types.DequeueOptions) ([]string, error) {
+func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options ...types.DequeueOptions) ([]types.DequeuedMessage, error) {
 	opts := getDequeueOptions(options)
 	url := getQueueURL(queueName)
 
@@ -129,9 +130,14 @@ func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options
 		return nil, nil
 	}
 
-	messageBodies := make([]string, len(resp.Messages))
+	messages := make([]types.DequeuedMessage, len(resp.Messages))
 	for i, message := range resp.Messages {
-		messageBodies[i] = *message.Body
+		messages[i] = types.DequeuedMessage{
+			MessageId:     *message.MessageId,
+			ReceiptHandle: *message.ReceiptHandle,
+			Body:          *message.Body,
+			ReceivedAt:    time.Now(),
+		}
 	}
 
 	if opts.DeleteMessage {
@@ -147,15 +153,15 @@ func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options
 		}
 	}
 
-	return messageBodies, nil
+	return messages, nil
 }
 
 // Delete deletes a message from the specified queue.
-func (q *SQSMessageQueue) Delete(ctx context.Context, queueName string, message string) error {
+func (q *SQSMessageQueue) Delete(ctx context.Context, queueName string, id string) error {
 	url := getQueueURL(queueName)
 	_, err := q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(url),
-		ReceiptHandle: aws.String(message),
+		ReceiptHandle: aws.String(id),
 	})
 	return err
 }

@@ -3,10 +3,12 @@ package redis
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/finch-technologies/go-utils/adapters"
 	"github.com/finch-technologies/go-utils/config/database"
 	"github.com/finch-technologies/go-utils/queues/types"
+	"github.com/google/uuid"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -34,12 +36,19 @@ func (msgQueue *RedisMessageQueue) Enqueue(ctx context.Context, queue string, pa
 	return nil
 }
 
-func (msgQueue *RedisMessageQueue) Dequeue(ctx context.Context, queue string, options ...types.DequeueOptions) ([]string, error) {
+func (msgQueue *RedisMessageQueue) Dequeue(ctx context.Context, queue string, options ...types.DequeueOptions) ([]types.DequeuedMessage, error) {
 	// TODO: Implement batch dequeue
-	items := []string{}
+	items := []types.DequeuedMessage{}
 
 	for i := 0; i < options[0].BatchSize; i++ {
-		item, err := msgQueue.rdb.RPop(ctx, queue).Result()
+		itemStr, err := msgQueue.rdb.RPop(ctx, queue).Result()
+
+		item := types.DequeuedMessage{
+			MessageId:     uuid.New().String(),
+			ReceiptHandle: uuid.New().String(),
+			Body:          itemStr,
+			ReceivedAt:    time.Now(),
+		}
 
 		if err == nil {
 			items = append(items, item)
@@ -53,7 +62,7 @@ func (msgQueue *RedisMessageQueue) Dequeue(ctx context.Context, queue string, op
 	return items, nil
 }
 
-func (msgQueue *RedisMessageQueue) Delete(ctx context.Context, queue string, message string) error {
+func (msgQueue *RedisMessageQueue) Delete(ctx context.Context, queue string, id string) error {
 	// Redis does not support deleting a specific message from a queue since dequeue always removes the last item
 	return nil
 }

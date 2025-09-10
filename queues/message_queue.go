@@ -18,7 +18,7 @@ type Queue string
 type IMessageQueue interface {
 	Count(ctx context.Context, queue string) (int, error)
 	Enqueue(ctx context.Context, queue string, payload string, options ...types.EnqueueOptions) error
-	Dequeue(ctx context.Context, queue string, options ...types.DequeueOptions) ([]string, error)
+	Dequeue(ctx context.Context, queue string, options ...types.DequeueOptions) ([]types.DequeuedMessage, error)
 	Delete(ctx context.Context, queue string, message string) error
 }
 
@@ -63,48 +63,53 @@ func Enqueue[T interface{}](ctx context.Context, queue Queue, payload T, options
 	return mq.Enqueue(ctx, string(queue), string(jsonBytes))
 }
 
-func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.DequeueOptions) ([]T, error) {
+func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.DequeueOptions) ([]types.QueueMessage[T], error) {
 
-	var payloads []T
+	var messages []types.QueueMessage[T]
 
 	if mq == nil {
-		return payloads, fmt.Errorf("no message queue driver found")
+		return messages, fmt.Errorf("no message queue driver found")
 	}
 
-	messages, err := mq.Dequeue(ctx, string(queue))
+	dequeuedMessages, err := mq.Dequeue(ctx, string(queue), options...)
 
 	if err != nil {
-		return payloads, fmt.Errorf("failed to dequeue item from queue: %s", err)
+		return messages, fmt.Errorf("failed to dequeue item from queue: %s", err)
 	}
 
-	if len(messages) == 0 {
-		return payloads, nil
+	if len(dequeuedMessages) == 0 {
+		return messages, nil
 	}
 
-	for _, message := range messages {
+	for _, dequeuedMessage := range dequeuedMessages {
 		var payload any
 
 		if options[0].ParseFunc != nil {
-			payload, err = options[0].ParseFunc(message)
+			payload, err = options[0].ParseFunc(dequeuedMessage.Body)
 		} else {
-			err = json.Unmarshal([]byte(message), &payload)
+			err = json.Unmarshal([]byte(dequeuedMessage.Body), &payload)
 		}
 
 		if err != nil {
-			return payloads, fmt.Errorf("failed to unmarshal payload from json: %s", err)
+			return messages, fmt.Errorf("failed to unmarshal payload from json: %s", err)
 		}
 
-		payloads = append(payloads, payload.(T))
+		messages = append(messages, types.QueueMessage[T]{
+			MessageId:     dequeuedMessage.MessageId,
+			ReceiptHandle: dequeuedMessage.ReceiptHandle,
+			Payload:       payload.(T),
+			ReceivedAt:    dequeuedMessage.ReceivedAt,
+		})
 	}
 
-	return payloads, nil
+	return messages, nil
 }
 
-func Delete(ctx context.Context, queue Queue, message string) error {
+func Delete(ctx context.Context, queue Queue, id string) error {
 
 	if mq == nil {
 		return fmt.Errorf("no message queue driver found")
 	}
 
-	return mq.Delete(ctx, string(queue), message)
+	return mq.Delete(ctx, string(queue), id)
 }
