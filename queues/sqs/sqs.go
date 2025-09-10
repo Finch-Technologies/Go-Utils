@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -120,7 +121,10 @@ func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options
 		},
 	}
 
-	resp, err := q.client.ReceiveMessage(ctx, input)
+	// CRITICAL: Use background context for AWS call to prevent message loss during shutdown.
+	// If the parent context is cancelled mid-request, AWS may have already dequeued messages
+	// but they would be lost until visibility timeout expires. Let the AWS call complete.
+	resp, err := q.client.ReceiveMessage(context.Background(), input)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive message: %w", err)
@@ -132,17 +136,28 @@ func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options
 
 	messages := make([]types.DequeuedMessage, len(resp.Messages))
 	for i, message := range resp.Messages {
+		// Extract ApproximateReceiveCount from message attributes
+		approximateReceiveCount := 0
+		if message.Attributes != nil {
+			if countStr, ok := message.Attributes["ApproximateReceiveCount"]; ok {
+				if count, err := strconv.Atoi(countStr); err == nil {
+					approximateReceiveCount = count
+				}
+			}
+		}
+
 		messages[i] = types.DequeuedMessage{
-			MessageId:     *message.MessageId,
-			ReceiptHandle: *message.ReceiptHandle,
-			Body:          *message.Body,
-			ReceivedAt:    time.Now(),
+			MessageId:               *message.MessageId,
+			ReceiptHandle:           *message.ReceiptHandle,
+			Body:                    *message.Body,
+			ReceivedAt:              time.Now(),
+			ApproximateReceiveCount: approximateReceiveCount,
 		}
 	}
 
 	if opts.DeleteMessage {
 		for _, message := range resp.Messages {
-			_, err = q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+			_, err = q.client.DeleteMessage(context.Background(), &sqs.DeleteMessageInput{
 				QueueUrl:      aws.String(url),
 				ReceiptHandle: message.ReceiptHandle,
 			})
@@ -159,7 +174,7 @@ func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options
 // Delete deletes a message from the specified queue.
 func (q *SQSMessageQueue) Delete(ctx context.Context, queueName string, id string) error {
 	url := getQueueURL(queueName)
-	_, err := q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+	_, err := q.client.DeleteMessage(context.Background(), &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(url),
 		ReceiptHandle: aws.String(id),
 	})

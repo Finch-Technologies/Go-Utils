@@ -16,10 +16,11 @@ type DequeueOptions struct {
 }
 
 type DequeuedMessage struct {
-	MessageId     string
-	ReceiptHandle string
-	Body          string
-	ReceivedAt    time.Time
+	MessageId               string
+	ReceiptHandle           string
+	Body                    string
+	ReceivedAt              time.Time
+	ApproximateReceiveCount int
 }
 
 type QueueMessage[T any] struct {
