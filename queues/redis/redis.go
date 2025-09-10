@@ -36,16 +36,24 @@ func (msgQueue *RedisMessageQueue) Enqueue(ctx context.Context, queue string, pa
 
 func (msgQueue *RedisMessageQueue) Dequeue(ctx context.Context, queue string, options ...types.DequeueOptions) ([]string, error) {
 	// TODO: Implement batch dequeue
-	item, err := msgQueue.rdb.RPop(ctx, queue).Result()
-	items := []string{item}
+	items := []string{}
 
-	if err == redis.Nil {
-		// Queue is empty
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get item from queue: %s", err)
+	for i := 0; i < options[0].BatchSize; i++ {
+		item, err := msgQueue.rdb.RPop(ctx, queue).Result()
+
+		if err == nil {
+			items = append(items, item)
+		} else if err == redis.Nil {
+			break
+		} else {
+			return nil, fmt.Errorf("failed to get item from queue: %s", err)
+		}
 	}
 
 	return items, nil
+}
+
+func (msgQueue *RedisMessageQueue) Delete(ctx context.Context, queue string, message string) error {
+	// Redis does not support deleting a specific message from a queue since dequeue always removes the last item
+	return nil
 }

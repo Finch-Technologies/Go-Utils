@@ -10,4 +10,5 @@ type DequeueOptions struct {
 	WaitTimeSeconds int
 	BatchSize       int
 	DeleteMessage   bool
+	ParseFunc       func(message string) (any, error)
 }

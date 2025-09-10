@@ -19,6 +19,7 @@ type IMessageQueue interface {
 	Count(ctx context.Context, queue string) (int, error)
 	Enqueue(ctx context.Context, queue string, payload string, options ...types.EnqueueOptions) error
 	Dequeue(ctx context.Context, queue string, options ...types.DequeueOptions) ([]string, error)
+	Delete(ctx context.Context, queue string, message string) error
 }
 
 var mq IMessageQueue
@@ -81,14 +82,19 @@ func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.D
 	}
 
 	for _, message := range messages {
-		var payload T
-		err = json.Unmarshal([]byte(message), &payload)
+		var payload any
+
+		if options[0].ParseFunc != nil {
+			payload, err = options[0].ParseFunc(message)
+		} else {
+			err = json.Unmarshal([]byte(message), &payload)
+		}
 
 		if err != nil {
 			return payloads, fmt.Errorf("failed to unmarshal payload from json: %s", err)
 		}
 
-		payloads = append(payloads, payload)
+		payloads = append(payloads, payload.(T))
 	}
 
 	return payloads, nil

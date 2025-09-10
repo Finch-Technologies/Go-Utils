@@ -149,3 +149,13 @@ func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options
 
 	return messageBodies, nil
 }
+
+// Delete deletes a message from the specified queue.
+func (q *SQSMessageQueue) Delete(ctx context.Context, queueName string, message string) error {
+	url := getQueueURL(queueName)
+	_, err := q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(url),
+		ReceiptHandle: aws.String(message),
+	})
+	return err
+}
