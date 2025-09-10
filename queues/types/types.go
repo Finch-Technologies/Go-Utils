@@ -24,8 +24,9 @@ type DequeuedMessage struct {
 }
 
 type QueueMessage[T any] struct {
-	MessageId     string
-	ReceiptHandle string
-	Payload       T
-	ReceivedAt    time.Time
+	MessageId               string
+	ReceiptHandle           string
+	Payload                 T
+	ReceivedAt              time.Time
+	ApproximateReceiveCount int
 }

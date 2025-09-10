@@ -95,10 +95,11 @@ func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.D
 		}
 
 		messages = append(messages, types.QueueMessage[T]{
-			MessageId:     dequeuedMessage.MessageId,
-			ReceiptHandle: dequeuedMessage.ReceiptHandle,
-			Payload:       payload.(T),
-			ReceivedAt:    dequeuedMessage.ReceivedAt,
+			MessageId:               dequeuedMessage.MessageId,
+			ReceiptHandle:           dequeuedMessage.ReceiptHandle,
+			Payload:                 payload.(T),
+			ReceivedAt:              dequeuedMessage.ReceivedAt,
+			ApproximateReceiveCount: dequeuedMessage.ApproximateReceiveCount,
 		})
 	}
 
