@@ -8,4 +8,6 @@ type EnqueueOptions struct {
 
 type DequeueOptions struct {
 	WaitTimeSeconds int
+	BatchSize       int
+	DeleteMessage   bool
 }

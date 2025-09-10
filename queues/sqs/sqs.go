@@ -103,33 +103,49 @@ func getDequeueOptions(options []types.DequeueOptions) types.DequeueOptions {
 }
 
 // Dequeue receives a message from the specified queue and deletes it after processing.
-func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options ...types.DequeueOptions) (string, error) {
+func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options ...types.DequeueOptions) ([]string, error) {
 	opts := getDequeueOptions(options)
 	url := getQueueURL(queueName)
-	resp, err := q.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+
+	input := &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(url),
-		MaxNumberOfMessages: 1,
+		MaxNumberOfMessages: int32(opts.BatchSize),
 		WaitTimeSeconds:     int32(opts.WaitTimeSeconds),
-	})
+		MessageAttributeNames: []string{
+			string(sqstypes.QueueAttributeNameAll),
+		},
+		AttributeNames: []sqstypes.QueueAttributeName{
+			sqstypes.QueueAttributeNameAll,
+		},
+	}
+
+	resp, err := q.client.ReceiveMessage(ctx, input)
 
 	if err != nil {
-		return "", fmt.Errorf("failed to receive message: %w", err)
+		return nil, fmt.Errorf("failed to receive message: %w", err)
 	}
 
 	if len(resp.Messages) == 0 {
-		return "", nil
+		return nil, nil
 	}
 
-	message := resp.Messages[0]
-
-	_, err = q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(url),
-		ReceiptHandle: message.ReceiptHandle,
-	})
-
-	if err != nil {
-		return "", fmt.Errorf("failed to delete message: %w", err)
+	messageBodies := make([]string, len(resp.Messages))
+	for i, message := range resp.Messages {
+		messageBodies[i] = *message.Body
 	}
 
-	return *message.Body, nil
+	if opts.DeleteMessage {
+		for _, message := range resp.Messages {
+			_, err = q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+				QueueUrl:      aws.String(url),
+				ReceiptHandle: message.ReceiptHandle,
+			})
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete message: %w", err)
+			}
+		}
+	}
+
+	return messageBodies, nil
 }

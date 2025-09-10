@@ -34,15 +34,18 @@ func (msgQueue *RedisMessageQueue) Enqueue(ctx context.Context, queue string, pa
 	return nil
 }
 
-func (msgQueue *RedisMessageQueue) Dequeue(ctx context.Context, queue string, options ...types.DequeueOptions) (string, error) {
-	itemStr, err := msgQueue.rdb.RPop(ctx, queue).Result()
+func (msgQueue *RedisMessageQueue) Dequeue(ctx context.Context, queue string, options ...types.DequeueOptions) ([]string, error) {
+	// TODO: Implement batch dequeue
+	item, err := msgQueue.rdb.RPop(ctx, queue).Result()
+	items := []string{item}
+
 	if err == redis.Nil {
 		// Queue is empty
-		return "", nil
+		return nil, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to get item from queue: %s", err)
+		return nil, fmt.Errorf("failed to get item from queue: %s", err)
 	}
 
-	return itemStr, nil
+	return items, nil
 }
