@@ -20,5 +20,8 @@ type LoggerInterface interface {
 	Error(v ...any)
 	Errorf(s string, v ...any)
 	ErrorStack(stack, s string, v ...any)
+	DebugFields(msg string, fields map[string]any)
+	InfoFields(msg string, fields map[string]interface{})
+	ErrorFields(msg string, fields map[string]interface{})
 	GetContext() context.Context
 }

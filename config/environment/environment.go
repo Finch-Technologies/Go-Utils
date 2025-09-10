@@ -17,3 +17,10 @@ func IsLocal() bool {
 func GetEnvironment() Environment {
 	return Environment(os.Getenv("ENVIRONMENT"))
 }
+
+func GetEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}

@@ -157,3 +157,30 @@ func (z *ZeroLogger) InfoFile(fileLocation string, data string) {
 func (z *ZeroLogger) ErrorFile(fileLocation string, data string) {
 	z.logger.Error().Str("file", fileLocation).Msg(data)
 }
+
+// DebugFields logs a debug level message with structured fields
+func (z *ZeroLogger) DebugFields(msg string, fields map[string]any) {
+	event := z.logger.Debug()
+	for k, v := range fields {
+		event = event.Interface(k, v)
+	}
+	event.Msg(msg)
+}
+
+// InfoFields logs an info level message with structured fields
+func (z *ZeroLogger) InfoFields(msg string, fields map[string]interface{}) {
+	event := z.logger.Info()
+	for k, v := range fields {
+		event = event.Interface(k, v)
+	}
+	event.Msg(msg)
+}
+
+// ErrorFields logs an error level message with structured fields
+func (z *ZeroLogger) ErrorFields(msg string, fields map[string]interface{}) {
+	event := z.logger.Error()
+	for k, v := range fields {
+		event = event.Interface(k, v)
+	}
+	event.Msg(msg)
+}

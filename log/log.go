@@ -60,6 +60,21 @@ func ErrorStack(stack, s string, v ...any) {
 	logger.ErrorStack(stack, s, v...)
 }
 
+// DebugFields logs a debug level message with structured fields
+func DebugFields(msg string, fields map[string]any) {
+	logger.DebugFields(msg, fields)
+}
+
+// InfoFields logs an info level message with structured fields
+func InfoFields(msg string, fields map[string]interface{}) {
+	logger.InfoFields(msg, fields)
+}
+
+// ErrorFields logs an error level message with structured fields
+func ErrorFields(msg string, fields map[string]interface{}) {
+	logger.ErrorFields(msg, fields)
+}
+
 func GetContext() context.Context {
 	return logger.GetContext()
 }

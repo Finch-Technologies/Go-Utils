@@ -263,3 +263,19 @@ func RegexSubMatch(r *regexp.Regexp, str string) map[string]string {
 
 	return subMatchMap
 }
+
+func ParseInt(s string) int {
+	value, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return value
+}
+
+func ParseTimeout(s string) time.Duration {
+	duration, err := time.ParseDuration(s)
+	if err != nil {
+		return 30 * time.Second // default
+	}
+	return duration
+}
