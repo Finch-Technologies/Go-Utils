@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/finch-technologies/go-utils/config/environment"
+	"github.com/finch-technologies/go-utils/config/env"
 	"github.com/finch-technologies/go-utils/events"
 	"github.com/finch-technologies/go-utils/log/logstorage"
 	"github.com/rs/zerolog"
@@ -29,7 +29,7 @@ func New(ctx context.Context, ctxFields any, db logstorage.ILogStore) *ZeroLogge
 	var loggerCtx zerolog.Context
 
 	var cw io.Writer = os.Stdout
-	if environment.IsLocal() {
+	if env.IsLocal() {
 		cw = zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.DateTime}
 	}
 

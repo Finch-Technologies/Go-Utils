@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/finch-technologies/go-utils/adapters"
 	"github.com/finch-technologies/go-utils/config/database"
-	"github.com/finch-technologies/go-utils/config/environment"
+	"github.com/finch-technologies/go-utils/config/env"
 	"github.com/finch-technologies/go-utils/log"
 )
 
@@ -220,13 +220,13 @@ func (d *DynamoDB) Delete(key string) error {
 }
 
 func getTableName(suffix string) string {
-	env := environment.GetEnvironment()
+	environment := env.Get()
 
-	if env == "" {
-		env = environment.Local
+	if environment == "" {
+		environment = env.Local
 	}
 
-	return fmt.Sprintf("shrike.%s.%s", env, suffix)
+	return fmt.Sprintf("shrike.%s.%s", environment, suffix)
 }
 
 func (d *DynamoDB) GetListWithPrefix(prefix string, limit int64) ([]string, error) {

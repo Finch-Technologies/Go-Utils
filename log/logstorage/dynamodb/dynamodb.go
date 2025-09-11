@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/finch-technologies/go-utils/adapters"
 	"github.com/finch-technologies/go-utils/config/database"
-	"github.com/finch-technologies/go-utils/config/environment"
+	"github.com/finch-technologies/go-utils/config/env"
 	"github.com/google/uuid"
 )
 
@@ -127,11 +127,11 @@ func (d *DynamoDBLogDriver) batchDelete(writeRequests []*dynamodb.WriteRequest) 
 }
 
 func getTableName(suffix string) string {
-	env := environment.GetEnvironment()
+	environment := env.Get()
 
-	if env == "" {
-		env = environment.Local
+	if environment == "" {
+		environment = env.Local
 	}
 
-	return fmt.Sprintf("shrike.%s.%s", env, suffix)
+	return fmt.Sprintf("shrike.%s.%s", environment, suffix)
 }

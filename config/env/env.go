@@ -1,4 +1,4 @@
-package environment
+package env
 
 import (
 	"os"
@@ -11,14 +11,14 @@ const (
 )
 
 func IsLocal() bool {
-	return GetEnvironment() == Local
+	return Get() == Local
 }
 
-func GetEnvironment() Environment {
+func Get() Environment {
 	return Environment(os.Getenv("ENVIRONMENT"))
 }
 
-func GetEnvOrDefault(key, defaultValue string) string {
+func GetOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
