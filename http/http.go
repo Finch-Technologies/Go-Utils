@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -15,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aoliveti/curling"
 	"github.com/finch-technologies/go-utils/log"
 	"github.com/google/go-querystring/query"
 )
@@ -110,23 +108,45 @@ func JsonBody[T interface{}](ctx context.Context, response *http.Response) (T, e
 
 func FetchRaw(ctx context.Context, uri, method string, payload interface{}, options ...FetchOptions) (*http.Response, error) {
 	method = strings.ToUpper(method)
-	client := &http.Client{}
-
 	opts := getOpts(options)
 
-	if opts.CookieJar != nil && opts.Headers.Get("Cookie") == "" && opts.Cookies == nil {
-		client.Jar = opts.CookieJar
-	}
-
-	var body io.Reader = nil
-
-	var err error
+	// Build proxy URL if proxy options exist
+	var proxyURL string
 	if opts.Proxy != nil {
-		err = addProxy(client, opts.Proxy)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create client with proxy: %s", err)
+		proxyHost := regexp.MustCompile(`^(http|https)://`).ReplaceAllString(opts.Proxy.Host, "")
+		if opts.Proxy.Username != "" && opts.Proxy.Password != "" {
+			proxyURL = fmt.Sprintf("http://%s:%s@%s:%s", opts.Proxy.Username, opts.Proxy.Password, proxyHost, opts.Proxy.Port)
+		} else {
+			proxyURL = fmt.Sprintf("http://%s:%s", proxyHost, opts.Proxy.Port)
 		}
 	}
+
+	// Convert headers to map[string]string
+	var headers map[string]string
+	if opts.Headers != nil {
+		headers = make(map[string]string)
+		for key, values := range *opts.Headers {
+			if len(values) > 0 {
+				headers[key] = values[0] // Use the first value if multiple exist
+			}
+		}
+	}
+
+	// Handle cookies by converting them to header
+	if opts.Cookies != nil {
+		if headers == nil {
+			headers = make(map[string]string)
+		}
+		var cookieStrings []string
+		for _, cookie := range *opts.Cookies {
+			cookieStrings = append(cookieStrings, fmt.Sprintf("%s=%s", cookie.Name, cookie.Value))
+		}
+		if len(cookieStrings) > 0 {
+			headers["Cookie"] = strings.Join(cookieStrings, "; ")
+		}
+	}
+
+	var body []byte
 	if payload != nil {
 		if method == "GET" {
 			var qs string
@@ -150,71 +170,59 @@ func FetchRaw(ctx context.Context, uri, method string, payload interface{}, opti
 			}
 		} else if opts.RawBody {
 			if reflect.TypeOf(payload).Kind() == reflect.String {
-				body = strings.NewReader(payload.(string))
+				body = []byte(payload.(string))
 			}
 		} else {
 			jsonBytes, err := json.Marshal(payload)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create request body: %s", err)
 			}
-			//log.Debug("Request body: %s", string(jsonBytes))
-			body = bytes.NewReader(jsonBytes)
+			body = jsonBytes
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, uri, body)
+	var resp *HttpxResponse
+	var err error
+
+	// Use our custom Request function with CookieJar support
+	if opts.CookieJar != nil {
+		resp, err = RequestWithCookieJar(ctx, method, uri, body, headers, proxyURL, 30*time.Second, opts.CookieJar)
+	} else {
+		resp, err = Request(ctx, method, uri, body, headers, proxyURL, 30*time.Second)
+	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create new http request: %s", err)
+		return nil, fmt.Errorf("http request failed with error: %s", err)
 	}
 
-	if opts.Headers != nil {
-		for key, values := range *opts.Headers {
-			for _, value := range values {
-				req.Header.Add(key, value)
-			}
-		}
-	}
-
-	if opts.Cookies != nil {
-		for _, cookie := range *opts.Cookies {
-			req.AddCookie(&cookie)
-		}
-	}
-
-	if opts.ShowCurl {
-		curlCmd, _ := curling.NewFromRequest(req)
-		log.Debugf("Request: %s", curlCmd.String())
-	}
-
-	resp, err := client.Do(req)
-
-	if err != nil {
-		return resp, fmt.Errorf("http request failed with error: %s", err)
+	// Create a mock HTTP response for backward compatibility
+	httpResp := &http.Response{
+		Status:        fmt.Sprintf("%d %s", resp.StatusCode, http.StatusText(resp.StatusCode)),
+		StatusCode:    resp.StatusCode,
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        resp.Headers,
+		Body:          io.NopCloser(bytes.NewReader(resp.Body)),
+		ContentLength: int64(len(resp.Body)),
 	}
 
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("http request was unsuccessful with status code: %d. request url: %s", resp.StatusCode, uri)
 	}
 
-	return resp, nil
+	if opts.ShowCurl {
+		log.Debugf("Request: %s %s", method, uri)
+		if headers != nil {
+			for key, value := range headers {
+				log.Debugf("Header: %s: %s", key, value)
+			}
+		}
+	}
+
+	return httpResp, nil
 }
 
-func addProxy(client *http.Client, proxy *Proxy) error {
-	//remove the http:// or https:// from the host using regex
-	proxyHost := regexp.MustCompile(`^(http|https)://`).ReplaceAllString(proxy.Host, "")
-
-	proxyUrl, err := url.Parse("http://" + proxy.Username + ":" + proxy.Password + "@" + proxyHost + ":" + proxy.Port)
-	if err != nil {
-		return err
-	}
-	transport := &http.Transport{
-		Proxy: http.ProxyURL(proxyUrl),
-	}
-	client.Transport = transport
-	client.Timeout = 30 * time.Second
-	return nil
-}
 
 func FetchData(ctx context.Context, apiURL, method, stage string, headers *http.Header, responseType string) (string, error) {
 	client := &http.Client{}
@@ -244,7 +252,7 @@ func FetchData(ctx context.Context, apiURL, method, stage string, headers *http.
 	}
 
 	// Read the response body
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
