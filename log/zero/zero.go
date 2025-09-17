@@ -10,7 +10,6 @@ import (
 
 	"github.com/finch-technologies/go-utils/config/env"
 	"github.com/finch-technologies/go-utils/events"
-	"github.com/finch-technologies/go-utils/log/logstorage"
 	"github.com/rs/zerolog"
 )
 
@@ -19,7 +18,7 @@ type ZeroLogger struct {
 	context context.Context
 }
 
-func New(ctx context.Context, ctxFields any, db logstorage.ILogStore) *ZeroLogger {
+func New(ctx context.Context, ctxFields any) *ZeroLogger {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	if os.Getenv("LOG_LEVEL") == "debug" {
@@ -34,9 +33,6 @@ func New(ctx context.Context, ctxFields any, db logstorage.ILogStore) *ZeroLogge
 	}
 
 	var mw io.Writer = cw
-	if db != nil {
-		mw = io.MultiWriter(cw, db)
-	}
 
 	loggerCtx = zerolog.New(mw).With().Timestamp()
 
@@ -59,7 +55,7 @@ func New(ctx context.Context, ctxFields any, db logstorage.ILogStore) *ZeroLogge
 func FromContext(ctx context.Context) *ZeroLogger {
 
 	if ctx == nil || ctx.Err() != nil {
-		return New(context.Background(), nil, nil)
+		return New(context.Background(), nil)
 	}
 
 	logger := zerolog.Ctx(ctx)

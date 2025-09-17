@@ -13,11 +13,11 @@ func GetKey(id string, suffix string) string {
 	return id + ":" + suffix
 }
 
-func Get[T any](key string) (T, error) {
+func Get[T any](dbName string, key string, driver ...string) (T, error) {
 
 	var value T
 
-	db, err := database.GetMainDatabase()
+	db, err := database.GetDatabase(dbName, driver...)
 
 	if err != nil {
 		return value, err
@@ -38,8 +38,8 @@ func Get[T any](key string) (T, error) {
 	return value, err
 }
 
-func GetString(key string) (string, error) {
-	db, err := database.GetMainDatabase()
+func GetString(dbName, key string, driver ...string) (string, error) {
+	db, err := database.GetDatabase(dbName, driver...)
 
 	if err != nil {
 		return "", err
@@ -48,8 +48,8 @@ func GetString(key string) (string, error) {
 	return db.GetString(key)
 }
 
-func GetInt(key string) (int, error) {
-	db, err := database.GetMainDatabase()
+func GetInt(dbName, key string, driver ...string) (int, error) {
+	db, err := database.GetDatabase(dbName, driver...)
 
 	if err != nil {
 		return 0, err
@@ -70,8 +70,8 @@ func GetInt(key string) (int, error) {
 	return value, nil
 }
 
-func Set(key string, value any, expiration time.Duration) error {
-	db, err := database.GetMainDatabase()
+func Set(dbName, key string, value any, expiration time.Duration, driver ...string) error {
+	db, err := database.GetDatabase(dbName, driver...)
 
 	if err != nil {
 		return err
@@ -82,8 +82,8 @@ func Set(key string, value any, expiration time.Duration) error {
 	return nil
 }
 
-func Delete(key string) error {
-	db, err := database.GetMainDatabase()
+func Delete(dbName, key string, driver ...string) error {
+	db, err := database.GetDatabase(dbName, driver...)
 
 	if err != nil {
 		return err

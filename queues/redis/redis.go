@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/finch-technologies/go-utils/adapters"
-	"github.com/finch-technologies/go-utils/config/database"
 	"github.com/finch-technologies/go-utils/queues/types"
 	"github.com/google/uuid"
 
@@ -17,7 +16,7 @@ type RedisMessageQueue struct {
 	rdb *redis.Client
 }
 
-func New(db database.Name) *RedisMessageQueue {
+func New(db int) *RedisMessageQueue {
 	return &RedisMessageQueue{
 		rdb: adapters.GetRedisClient(db),
 	}

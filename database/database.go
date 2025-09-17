@@ -5,10 +5,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/finch-technologies/go-utils/config/database"
 	"github.com/finch-technologies/go-utils/database/dynamodb"
 	"github.com/finch-technologies/go-utils/database/redis"
+	"github.com/finch-technologies/go-utils/database/types"
 	"github.com/finch-technologies/go-utils/log"
+	"github.com/finch-technologies/go-utils/utils"
 )
 
 type IDatabase interface {
@@ -20,19 +21,38 @@ type IDatabase interface {
 	Delete(key string) error
 }
 
-var dbMap map[database.Name]IDatabase = make(map[database.Name]IDatabase)
+var dbMap map[string]IDatabase = make(map[string]IDatabase)
 
-func Init(dbName database.Name) (IDatabase, error) {
-	log.Debug("Initializing database....")
+func Init(options ...types.DbOptions) (IDatabase, error) {
+	log.Debug("Initializing database...")
 
+	if len(options) == 0 || options[0].DbName == "" {
+		return nil, errors.New("db name is required")
+	}
+
+	dbDriver := utils.StringOrDefault(os.Getenv("DATABASE_DRIVER"), "redis")
+
+	if options[0].Driver != "" {
+		dbDriver = options[0].Driver
+	}
+
+	dbName := options[0].DbName
+
+	var err error
 	db := dbMap[dbName]
 
 	if db == nil {
-		switch os.Getenv("DATABASE_DRIVER") {
+		switch dbDriver {
 		case "redis":
-			db = redis.New(dbName)
+			db, err = redis.New(options...)
+			if err != nil {
+				return nil, err
+			}
 		case "dynamodb":
-			db = dynamodb.New(dbName)
+			db, err = dynamodb.New(options...)
+			if err != nil {
+				return nil, err
+			}
 		default:
 			return nil, errors.New("invalid database driver")
 		}
@@ -42,17 +62,19 @@ func Init(dbName database.Name) (IDatabase, error) {
 	return db, nil
 }
 
-func GetDatabase(dbName database.Name) (IDatabase, error) {
+func GetDatabase(dbName string, driver ...string) (IDatabase, error) {
+
+	dbDriver := utils.StringOrDefault(os.Getenv("DATABASE_DRIVER"), "redis")
+
+	if len(driver) > 0 {
+		dbDriver = driver[0]
+	}
 
 	db := dbMap[dbName]
 
 	if db == nil {
-		return Init(dbName)
+		return Init(types.DbOptions{Driver: dbDriver, DbName: dbName})
 	}
 
 	return db, nil
-}
-
-func GetMainDatabase() (IDatabase, error) {
-	return GetDatabase(database.Name("main"))
 }

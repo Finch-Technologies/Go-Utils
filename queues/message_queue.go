@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/finch-technologies/go-utils/config/database"
 	"github.com/finch-technologies/go-utils/log"
 	"github.com/finch-technologies/go-utils/queues/redis"
 	"github.com/finch-technologies/go-utils/queues/sqs"
@@ -28,7 +27,7 @@ var err error
 func init() {
 	switch os.Getenv("QUEUE_DRIVER") {
 	case "redis":
-		mq = redis.New(database.Name("queue"))
+		mq = redis.New(4) //queue db
 	case "sqs":
 		mq, err = sqs.New()
 		if err != nil {

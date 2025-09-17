@@ -10,28 +10,52 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/finch-technologies/go-utils/adapters"
-	"github.com/finch-technologies/go-utils/config/database"
-	"github.com/finch-technologies/go-utils/config/env"
+	"github.com/finch-technologies/go-utils/database/types"
 	"github.com/finch-technologies/go-utils/log"
 )
 
 type DynamoDB struct {
-	db         *dynamodb.DynamoDB
-	tableName  string
-	primaryKey string
+	db               *dynamodb.DynamoDB
+	tableName        string
+	primaryKey       string
+	ttlAttribute     string
+	sortKeyAttribute string
+	valueStoreMode   types.ValueStoreMode
+	valueAttribute   string
 }
 
-func New(dbName database.Name) *DynamoDB {
+func getOptions(options ...types.DbOptions) types.DbOptions {
+	if len(options) > 0 {
+		return options[0]
+	}
+	return types.DbOptions{
+		PrimaryKey:       "id",
+		TTLAttribute:     "expiration_time",
+		SortKeyAttribute: "group_id",
+		ValueStoreMode:   types.ValueStoreModeString,
+		ValueAttribute:   "value",
+	}
+}
 
-	log.Debug("Initializing DynamoDB. Table name: ", getTableName(string(dbName)))
+func New(options ...types.DbOptions) (*DynamoDB, error) {
 
-	d := &DynamoDB{
-		db:         adapters.GetDynamoClient(),
-		tableName:  getTableName(string(dbName)),
-		primaryKey: "id",
+	opts := getOptions(options...)
+
+	if opts.TableName == "" {
+		return nil, fmt.Errorf("table name is required")
 	}
 
-	return d
+	d := &DynamoDB{
+		db:               adapters.GetDynamoClient(),
+		tableName:        opts.TableName,
+		primaryKey:       opts.PrimaryKey,
+		ttlAttribute:     opts.TTLAttribute,
+		sortKeyAttribute: opts.SortKeyAttribute,
+		valueStoreMode:   opts.ValueStoreMode,
+		valueAttribute:   opts.ValueAttribute,
+	}
+
+	return d, nil
 }
 
 func (d *DynamoDB) GetString(key string) (string, error) {
@@ -137,12 +161,12 @@ func (d *DynamoDB) Set(key string, value any, expiration time.Duration) {
 	}
 
 	item := map[string]interface{}{
-		d.primaryKey: key,
-		"value":      payload,
+		d.primaryKey:     key,
+		d.valueAttribute: payload,
 	}
 
 	if expiration > 0 {
-		item["expiration_time"] = time.Now().Add(expiration).Unix()
+		item[d.ttlAttribute] = time.Now().Add(expiration).Unix()
 	}
 
 	av, err := dynamodbattribute.MarshalMap(item)
@@ -177,13 +201,13 @@ func (d *DynamoDB) SetWithSortKey(pk string, sk string, value any, expiration ti
 	}
 
 	item := map[string]interface{}{
-		d.primaryKey: pk,
-		"group_id":   sk,
-		"value":      payload,
+		d.primaryKey:       pk,
+		d.sortKeyAttribute: sk,
+		d.valueAttribute:   payload,
 	}
 
 	if expiration > 0 {
-		item["expiration_time"] = time.Now().Add(expiration).Unix()
+		item[d.ttlAttribute] = time.Now().Add(expiration).Unix()
 	}
 
 	av, err := dynamodbattribute.MarshalMap(item)
@@ -217,16 +241,6 @@ func (d *DynamoDB) Delete(key string) error {
 	}
 
 	return nil
-}
-
-func getTableName(suffix string) string {
-	environment := env.Get()
-
-	if environment == "" {
-		environment = env.Local
-	}
-
-	return fmt.Sprintf("shrike.%s.%s", environment, suffix)
 }
 
 func (d *DynamoDB) GetListWithPrefix(prefix string, limit int64) ([]string, error) {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 
-	"github.com/finch-technologies/go-utils/config/database"
 	"github.com/finch-technologies/go-utils/messaging/redis"
 )
 
@@ -20,7 +19,7 @@ func Init() (IMessageBroker, error) {
 	if msgBroker == nil {
 		switch os.Getenv("MESSAGE_DRIVER") {
 		case "redis":
-			msgBroker = redis.New(database.Name("pubsub"))
+			msgBroker = redis.New(3) //pubsub db
 		default:
 			return nil, errors.New("invalid message broker driver")
 		}

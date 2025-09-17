@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/finch-technologies/go-utils/adapters"
-	"github.com/finch-technologies/go-utils/config/database"
+	"github.com/finch-technologies/go-utils/database/types"
 	"github.com/finch-technologies/go-utils/log"
 
 	"github.com/redis/go-redis/v9"
@@ -19,10 +20,37 @@ type RedisDB struct {
 	rdb *redis.Client
 }
 
-func New(db database.Name) *RedisDB {
-	return &RedisDB{
-		rdb: adapters.GetRedisClient(db),
+func getOptions(options ...types.DbOptions) types.DbOptions {
+	if len(options) > 0 {
+		return options[0]
 	}
+	return types.DbOptions{
+		PrimaryKey:       "id",
+		TTLAttribute:     "expiration_time",
+		SortKeyAttribute: "group_id",
+		ValueStoreMode:   types.ValueStoreModeString,
+		ValueAttribute:   "value",
+	}
+}
+
+func New(options ...types.DbOptions) (*RedisDB, error) {
+
+	opts := getOptions(options...)
+
+	//Check if the db name is set and is an int
+	if opts.DbName == "" {
+		return nil, fmt.Errorf("db name is required")
+	}
+
+	//Try to convert the db name to an int
+	dbId, err := strconv.Atoi(opts.DbName)
+	if err != nil {
+		return nil, fmt.Errorf("db name must be an int")
+	}
+
+	return &RedisDB{
+		rdb: adapters.GetRedisClient(dbId),
+	}, nil
 }
 
 func (r *RedisDB) GetString(key string) (string, error) {

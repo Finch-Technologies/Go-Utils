@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/finch-technologies/go-utils/log/logstorage"
 	"github.com/finch-technologies/go-utils/log/zero"
 	"github.com/rs/zerolog"
 )
@@ -12,7 +11,6 @@ import (
 var hasInit bool = false
 
 type Logger struct {
-	Db logstorage.ILogStore
 }
 
 func Init() {
@@ -21,15 +19,7 @@ func Init() {
 		return
 	}
 
-	db, error := logstorage.GetDatabase()
-
-	var z *zero.ZeroLogger
-
-	if error != nil {
-		z = zero.New(context.Background(), nil, nil)
-	} else {
-		z = zero.New(context.Background(), nil, db)
-	}
+	z := zero.New(context.Background(), nil)
 
 	zerolog.DefaultContextLogger = z.GetLogger()
 
@@ -39,17 +29,15 @@ func Init() {
 func New(ctx context.Context, ctxFields interface{}) LoggerInterface {
 	Init()
 
-	db, _ := logstorage.GetDatabase()
-
 	logdriver := os.Getenv("LOG_DRIVER")
 
 	var logger LoggerInterface
 
 	switch logdriver {
 	case "zerolog":
-		logger = zero.New(ctx, ctxFields, db)
+		logger = zero.New(ctx, ctxFields)
 	default:
-		logger = zero.New(ctx, ctxFields, db)
+		logger = zero.New(ctx, ctxFields)
 	}
 
 	return logger
