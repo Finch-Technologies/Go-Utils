@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/finch-technologies/go-utils/config/env"
+	"github.com/finch-technologies/go-utils/env"
 	"github.com/rs/zerolog"
 )
 
