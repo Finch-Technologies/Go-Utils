@@ -2,8 +2,6 @@ package log
 
 import (
 	"context"
-
-	"github.com/finch-technologies/go-utils/events"
 )
 
 type LoggerInterface interface {
@@ -11,9 +9,9 @@ type LoggerInterface interface {
 	Debugf(s string, v ...any)
 	Info(v ...any)
 	Infof(s string, v ...any)
-	InfoEvent(eventType events.Event, data string)
-	ErrorEvent(eventType events.Event, data string)
-	ErrorEventWithResources(eventType events.Event, screenshot, text, data string)
+	InfoEvent(eventType string, data string)
+	ErrorEvent(eventType string, data string)
+	ErrorEventWithResources(eventType string, screenshot, text, data string)
 	InfoFile(filePath string, data string)
 	ErrorFile(filePath string, data string)
 	Warning(v ...any)

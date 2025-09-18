@@ -1,4 +1,4 @@
-package types
+package dynamo
 
 type ValueStoreMode string
 
@@ -8,8 +8,6 @@ const (
 )
 
 type DbOptions struct {
-	Driver           string //redis, dynamodb
-	DbName           string
 	TableName        string
 	PrimaryKey       string
 	TTLAttribute     string

@@ -1,15 +1,13 @@
-package queues
+package queue
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
-	"github.com/finch-technologies/go-utils/log"
-	"github.com/finch-technologies/go-utils/queues/redis"
-	"github.com/finch-technologies/go-utils/queues/sqs"
-	"github.com/finch-technologies/go-utils/queues/types"
+	"github.com/finch-technologies/go-utils/queue/redis"
+	"github.com/finch-technologies/go-utils/queue/sqs"
+	"github.com/finch-technologies/go-utils/queue/types"
 )
 
 type Queue string
@@ -21,21 +19,46 @@ type IMessageQueue interface {
 	Delete(ctx context.Context, queue string, message string) error
 }
 
+type QueueDriver string
+
+const (
+	QueueDriverRedis QueueDriver = "redis"
+	QueueDriverSQS   QueueDriver = "sqs"
+)
+
+type QueueConfig struct {
+	Driver  QueueDriver
+	RedisDb int
+}
+
 var mq IMessageQueue
 var err error
 
-func init() {
-	switch os.Getenv("QUEUE_DRIVER") {
-	case "redis":
-		mq = redis.New(4) //queue db
-	case "sqs":
+func Init(config ...QueueConfig) error {
+
+	redisDb := 4
+
+	if len(config) == 0 {
+		return fmt.Errorf("no queue config provided")
+	}
+
+	if config[0].RedisDb != 0 {
+		redisDb = config[0].RedisDb
+	}
+
+	switch config[0].Driver {
+	case QueueDriverRedis:
+		mq = redis.New(redisDb) //queue db
+	case QueueDriverSQS:
 		mq, err = sqs.New()
 		if err != nil {
-			log.Errorf("failed to create sqs message queue: %s\n", err)
+			return fmt.Errorf("failed to create sqs message queue: %s", err)
 		}
 	default:
-		log.Error("no valid message queue driver specified")
+		return fmt.Errorf("no valid message queue driver specified")
 	}
+
+	return nil
 }
 
 func Count(ctx context.Context, queue Queue) (int, error) {

@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
-	"github.com/finch-technologies/go-utils/queues/types"
+	"github.com/finch-technologies/go-utils/queue/types"
 )
 
 // SQSMessageQueue is a concrete implementation of IMessageQueue using AWS SQS.

@@ -2,8 +2,6 @@ package log
 
 import (
 	"context"
-
-	"github.com/finch-technologies/go-utils/events"
 )
 
 var logger = New(context.Background(), nil)
@@ -24,15 +22,15 @@ func Infof(s string, v ...any) {
 	logger.Infof(s, v...)
 }
 
-func InfoEvent(eventType events.Event, data string) {
+func InfoEvent(eventType string, data string) {
 	logger.InfoEvent(eventType, data)
 }
 
-func ErrorEvent(eventType events.Event, data string) {
+func ErrorEvent(eventType string, data string) {
 	logger.ErrorEvent(eventType, data)
 }
 
-func ErrorEventWithResources(eventType events.Event, screenshot, text, data string) {
+func ErrorEventWithResources(eventType string, screenshot, text, data string) {
 	logger.ErrorEventWithResources(eventType, screenshot, text, data)
 }
 

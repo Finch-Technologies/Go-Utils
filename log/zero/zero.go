@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/finch-technologies/go-utils/config/env"
-	"github.com/finch-technologies/go-utils/events"
 	"github.com/rs/zerolog"
 )
 
@@ -127,16 +126,16 @@ func (z *ZeroLogger) ErrorStack(stack, s string, v ...any) {
 	z.logger.Error().Stack().Msg(fmt.Sprintf(s, v...) + "\n\n" + stack)
 }
 
-func (z *ZeroLogger) InfoEvent(eventType events.Event, data string) {
-	z.logger.Info().Str("event", string(eventType)).Msg(data)
+func (z *ZeroLogger) InfoEvent(eventType string, data string) {
+	z.logger.Info().Str("event", eventType).Msg(data)
 }
 
-func (z *ZeroLogger) ErrorEvent(eventType events.Event, data string) {
-	z.logger.Error().Str("event", string(eventType)).Msg(data)
+func (z *ZeroLogger) ErrorEvent(eventType string, data string) {
+	z.logger.Error().Str("event", eventType).Msg(data)
 }
 
-func (z *ZeroLogger) ErrorEventWithResources(eventType events.Event, screenshot, text, data string) {
-	le := z.logger.Error().Str("event", string(eventType))
+func (z *ZeroLogger) ErrorEventWithResources(eventType string, screenshot, text, data string) {
+	le := z.logger.Error().Str("event", eventType)
 	if screenshot != "" {
 		le.Str("screenshotUrl", screenshot)
 	}

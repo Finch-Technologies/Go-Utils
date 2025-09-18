@@ -1,4 +1,4 @@
-package files
+package filesystem
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/finch-technologies/go-utils/files/types"
 	"github.com/finch-technologies/go-utils/log"
+	"github.com/finch-technologies/go-utils/storage/types"
 )
 
 type LocalStorage struct {

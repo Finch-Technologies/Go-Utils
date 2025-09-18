@@ -1,9 +1,9 @@
-package files
+package storage
 
 import (
 	"context"
 
-	"github.com/finch-technologies/go-utils/files/types"
+	"github.com/finch-technologies/go-utils/storage/types"
 )
 
 type Storage interface {

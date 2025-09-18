@@ -1,14 +1,13 @@
-package files
+package storage
 
 import (
 	"context"
 	"fmt"
-	"os"
 
-	local "github.com/finch-technologies/go-utils/files/local"
-	s3 "github.com/finch-technologies/go-utils/files/s3"
-	"github.com/finch-technologies/go-utils/files/types"
 	"github.com/finch-technologies/go-utils/log"
+	"github.com/finch-technologies/go-utils/storage/filesystem"
+	"github.com/finch-technologies/go-utils/storage/s3"
+	"github.com/finch-technologies/go-utils/storage/types"
 )
 
 type FileManager struct {
@@ -16,22 +15,41 @@ type FileManager struct {
 	initError bool
 }
 
+type StorageType string
+
+const (
+	StorageDiskLocal StorageType = "local"
+	StorageDiskS3    StorageType = "s3"
+)
+
+type StorageConfig struct {
+	Type   StorageType
+	Bucket string
+	Region string
+}
+
+func getConfig(config ...StorageConfig) StorageConfig {
+	if len(config) == 0 {
+		return StorageConfig{Type: StorageDiskLocal}
+	}
+	return config[0]
+}
+
 var fm *FileManager
 
-func Init() (*FileManager, error) {
+func Init(config ...StorageConfig) (*FileManager, error) {
 	var storage Storage
 	var err error
-	storageType := os.Getenv("STORAGE_TYPE")
 
-	switch storageType {
-	case "s3":
-		log.Debug("Using S3 storage")
-		region := os.Getenv("AWS_REGION")
-		bucket := os.Getenv("AWS_BUCKET_NAME")
-		storage, err = s3.GetS3Storage(bucket, region)
+	cfg := getConfig(config...)
+
+	switch cfg.Type {
+	case StorageDiskS3:
+		log.Debugf("Using S3 storage: %s", cfg.Bucket)
+		storage, err = s3.GetS3Storage(cfg.Bucket, cfg.Region)
 	default:
-		log.Debug("Using local storage")
-		storage, err = local.GetLocalStorage()
+		log.Debugf("Using local storage: %s", cfg.Type)
+		storage, err = filesystem.GetLocalStorage()
 	}
 
 	if err != nil {

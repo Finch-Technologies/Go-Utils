@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/finch-technologies/go-utils/adapters"
-	"github.com/finch-technologies/go-utils/queues/types"
+	"github.com/finch-technologies/go-utils/queue/types"
 	"github.com/google/uuid"
 
 	"github.com/redis/go-redis/v9"

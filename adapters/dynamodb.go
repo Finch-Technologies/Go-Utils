@@ -1,25 +1,27 @@
 package adapters
 
 import (
+	"context"
+	"fmt"
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
-var dynamodbClient *dynamodb.DynamoDB
+var dynamodbClient *dynamodb.Client
 
-func GetDynamoClient() *dynamodb.DynamoDB {
+func GetDynamoClient() (*dynamodb.Client, error) {
 	if dynamodbClient == nil {
-		sess := session.Must(session.NewSessionWithOptions(session.Options{
-			SharedConfigState: session.SharedConfigEnable,
-			Config: aws.Config{
-				Region: aws.String(os.Getenv("AWS_REGION")),
-			},
-		}))
-		dynamodbClient = dynamodb.New(sess)
+		awsConfig, err := config.LoadDefaultConfig(context.TODO(),
+			config.WithRegion(os.Getenv("AWS_REGION")),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load AWS config: %w", err)
+		}
+
+		dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	}
 
-	return dynamodbClient
+	return dynamodbClient, nil
 }

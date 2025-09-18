@@ -1,4 +1,4 @@
-package files
+package s3
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/finch-technologies/go-utils/files/types"
+	"github.com/finch-technologies/go-utils/storage/types"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"

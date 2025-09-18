@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strconv"
 	"time"
 
 	"github.com/finch-technologies/go-utils/adapters"
-	"github.com/finch-technologies/go-utils/database/types"
 	"github.com/finch-technologies/go-utils/log"
 
 	"github.com/redis/go-redis/v9"
@@ -20,36 +18,21 @@ type RedisDB struct {
 	rdb *redis.Client
 }
 
-func getOptions(options ...types.DbOptions) types.DbOptions {
+func getOptions(options ...DbOptions) DbOptions {
 	if len(options) > 0 {
 		return options[0]
 	}
-	return types.DbOptions{
-		PrimaryKey:       "id",
-		TTLAttribute:     "expiration_time",
-		SortKeyAttribute: "group_id",
-		ValueStoreMode:   types.ValueStoreModeString,
-		ValueAttribute:   "value",
+	return DbOptions{
+		Db: 0,
 	}
 }
 
-func New(options ...types.DbOptions) (*RedisDB, error) {
+func New(options ...DbOptions) (*RedisDB, error) {
 
 	opts := getOptions(options...)
 
-	//Check if the db name is set and is an int
-	if opts.DbName == "" {
-		return nil, fmt.Errorf("db name is required")
-	}
-
-	//Try to convert the db name to an int
-	dbId, err := strconv.Atoi(opts.DbName)
-	if err != nil {
-		return nil, fmt.Errorf("db name must be an int")
-	}
-
 	return &RedisDB{
-		rdb: adapters.GetRedisClient(dbId),
+		rdb: adapters.GetRedisClient(opts.Db),
 	}, nil
 }
 
@@ -80,7 +63,7 @@ func (r *RedisDB) Get(key string) ([]byte, error) {
 	return valueBytes, nil
 }
 
-func (r *RedisDB) Set(key string, value any, expiration time.Duration) {
+func (r *RedisDB) Set(key string, value any, expiration time.Duration) error {
 
 	payload := value
 
@@ -89,19 +72,21 @@ func (r *RedisDB) Set(key string, value any, expiration time.Duration) {
 	if t == reflect.Struct || t == reflect.Interface || t == reflect.Map || t == reflect.Slice || t == reflect.Array {
 		bytes, err := json.Marshal(value)
 		if err != nil {
-			log.Error("Failed to marshal payload: ", err)
-			return
+			return fmt.Errorf("failed to marshal payload: %w", err)
 		}
 		payload = string(bytes)
 	}
 
 	err := r.rdb.Set(context.Background(), key, payload, expiration).Err()
+
 	if err != nil {
-		log.Error("Failed to write value to redis: ", err)
+		return fmt.Errorf("failed to write value to redis: %w", err)
 	}
+
+	return nil
 }
 
-func (r *RedisDB) SetWithSortKey(pk string, sk string, value any, expiration time.Duration) {
+func (r *RedisDB) SetWithSortKey(pk string, sk string, value any, expiration time.Duration) error {
 
 	payload := value
 
@@ -110,16 +95,17 @@ func (r *RedisDB) SetWithSortKey(pk string, sk string, value any, expiration tim
 	if t == reflect.Struct || t == reflect.Interface || t == reflect.Map || t == reflect.Slice || t == reflect.Array {
 		bytes, err := json.Marshal(value)
 		if err != nil {
-			log.Error("Failed to marshal payload: ", err)
-			return
+			return fmt.Errorf("failed to marshal payload: %w", err)
 		}
 		payload = string(bytes)
 	}
 
 	err := r.rdb.HSet(context.Background(), pk, sk, payload).Err()
 	if err != nil {
-		log.Error("Failed to write value to redis: ", err)
+		return fmt.Errorf("failed to write value to redis: %w", err)
 	}
+
+	return nil
 }
 
 func (r *RedisDB) Delete(key string) error {
@@ -131,10 +117,10 @@ func (r *RedisDB) Delete(key string) error {
 	return nil
 }
 
-func (r *RedisDB) GetListWithPrefix(prefix string, limit int64) ([]string, error) {
+func (r *RedisDB) GetListWithPrefix(id string, skPrefix string, limit int64) ([]string, error) {
 	ctx := context.Background()
 
-	keys, err := r.rdb.Keys(ctx, prefix+"*").Result()
+	keys, err := r.rdb.Keys(ctx, id+"*"+skPrefix+"*").Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get keys from redis: %s", err)
 	}
