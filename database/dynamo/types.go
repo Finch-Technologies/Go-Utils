@@ -3,15 +3,16 @@ package dynamo
 type ValueStoreMode string
 
 const (
-	ValueStoreModeString ValueStoreMode = "string"
-	ValueStoreModeObject ValueStoreMode = "object"
+	ValueStoreModeJson       ValueStoreMode = "json"
+	ValueStoreModeAttributes ValueStoreMode = "attributes"
 )
 
 type DbOptions struct {
-	TableName        string
-	PrimaryKey       string
-	TTLAttribute     string
-	SortKeyAttribute string
-	ValueStoreMode   ValueStoreMode
-	ValueAttribute   string
+	Region                string
+	TableName             string
+	PartitionKeyAttribute string
+	TtlAttribute          string
+	SortKeyAttribute      string
+	ValueStoreMode        ValueStoreMode
+	ValueAttribute        string
 }
