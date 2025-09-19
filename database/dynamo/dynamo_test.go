@@ -12,6 +12,34 @@ type Person struct {
 	Email string `json:"email" dynamodbav:"email"`
 }
 
+func TestGeneric(t *testing.T) {
+
+	_, err := New(DbOptions{
+		TableName:        "dynamo.test",
+		ValueStoreMode:   ValueStoreModeAttributes,
+		SortKeyAttribute: "group_id",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to initialize table: %v", err)
+	}
+
+	Put("dynamo.test", "test_generic", Person{
+		Name:  "John Doe",
+		Email: "john.doe@example.com",
+	}, SetOptions{
+		Expiration: 1 * time.Minute,
+	})
+
+	value, err := Get[Person]("dynamo.test", "test_generic")
+
+	if err != nil {
+		t.Fatalf("Failed to get value: %v", err)
+	}
+
+	fmt.Println("Returned value: ", value)
+}
+
 func TestGetString(t *testing.T) {
 
 	table, err := New(DbOptions{

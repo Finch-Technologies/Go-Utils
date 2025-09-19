@@ -279,11 +279,11 @@ func (d *DynamoDB) Update(key string, value any, options ...SetOptions) error {
 	// Create the UpdateItem input
 	input := &dynamodb.UpdateItemInput{
 		TableName:                 aws.String(d.tableName),
-		Key:                      keys,
-		UpdateExpression:         aws.String(updateExpression),
+		Key:                       keys,
+		UpdateExpression:          aws.String(updateExpression),
 		ExpressionAttributeNames:  expressionAttributeNames,
 		ExpressionAttributeValues: expressionAttributeValues,
-		ReturnValues:             types.ReturnValueNone, // Don't return the updated item
+		ReturnValues:              types.ReturnValueNone, // Don't return the updated item
 	}
 
 	// Execute the update
@@ -386,19 +386,34 @@ func Get[T any](tableName string, key string, options ...GetOptions) (T, error) 
 		return value, err
 	}
 
-	valueInterface, err := table.Get(key, options...)
+	opts := GetOptions{
+		Result: &value,
+	}
+
+	//update the options with the result type
+	if len(options) > 0 {
+		opts := options[0]
+		opts.Result = &value
+	}
+
+	valueInterface, err := table.Get(key, []GetOptions{opts}...)
 
 	if err != nil {
 		return value, err
 	}
 
-	valueStr := valueInterface.(string)
+	if table.valueStoreMode == ValueStoreModeJson {
 
-	if valueStr == "" {
-		return value, errors.New("item not found in database")
+		valueStr := valueInterface.(string)
+
+		if valueStr == "" {
+			return value, errors.New("item not found in database")
+		}
+
+		err = json.Unmarshal([]byte(valueStr), &value)
+	} else {
+		value = *valueInterface.(*T)
 	}
-
-	err = json.Unmarshal([]byte(valueStr), &value)
 
 	return value, err
 }
