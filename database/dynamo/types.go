@@ -63,4 +63,5 @@ type QueryOptions struct {
 	SortKey               string
 	PartitionKeyCondition QueryCondition
 	SortKeyCondition      QueryCondition
+	Limit                 int
 }

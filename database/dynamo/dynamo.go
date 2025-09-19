@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"strconv"
 	"time"
@@ -20,26 +19,6 @@ import (
 )
 
 var tableMap map[string]*DynamoDB = make(map[string]*DynamoDB)
-
-func getOptions(options ...DbOptions) DbOptions {
-	defaultOpts := DbOptions{
-		Region:                utils.StringOrDefault(os.Getenv("AWS_REGION"), "af-south-1"),
-		PartitionKeyAttribute: "id",
-		TtlAttribute:          "expiration_time",
-		SortKeyAttribute:      "",
-		ValueStoreMode:        ValueStoreModeJson,
-		ValueAttribute:        "value",
-	}
-
-	opts := defaultOpts
-
-	if len(options) > 0 {
-		opts = options[0]
-		utils.MergeObjects(&opts, defaultOpts)
-	}
-
-	return opts
-}
 
 func New(options ...DbOptions) (*DynamoDB, error) {
 
@@ -68,33 +47,6 @@ func New(options ...DbOptions) (*DynamoDB, error) {
 	tableMap[opts.TableName] = d
 
 	return d, nil
-}
-
-func getTable(tableName string) (*DynamoDB, error) {
-
-	table := tableMap[tableName]
-
-	if table == nil {
-		return nil, fmt.Errorf("table not found")
-	}
-
-	return table, nil
-}
-
-func getGetOptions(options ...GetOptions) GetOptions {
-	defaultOpts := GetOptions{
-		Result: map[string]interface{}{},
-	}
-
-	opts := defaultOpts
-
-	if len(options) > 0 {
-		opts = options[0]
-
-		utils.MergeObjects(&opts, defaultOpts)
-	}
-
-	return opts
 }
 
 func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
@@ -157,12 +109,12 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
 	}
 }
 
-func (d *DynamoDB) Query(key string, options ...QueryOptions) (interface{}, error) {
+func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]interface{}, error) {
 	opts := getQueryOptions(options...)
 	now := time.Now().Unix()
 
 	// Build key condition expression
-	keyConditionExpression := fmt.Sprintf("#pk = :pk")
+	keyConditionExpression := "#pk = :pk"
 	expressionAttributeNames := map[string]string{
 		"#pk": d.partitionKeyAttribute,
 	}
@@ -203,6 +155,10 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) (interface{}, erro
 		KeyConditionExpression:    aws.String(keyConditionExpression),
 		ExpressionAttributeNames:  expressionAttributeNames,
 		ExpressionAttributeValues: expressionAttributeValues,
+	}
+
+	if opts.Limit > 0 {
+		input.Limit = aws.Int32(int32(opts.Limit))
 	}
 
 	result, err := d.client.Query(context.Background(), input)
@@ -256,28 +212,87 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) (interface{}, erro
 	return items, nil
 }
 
-func getQueryOptions(options ...QueryOptions) QueryOptions {
-	defaultOpts := QueryOptions{
-		Result:                map[string]interface{}{},
-		PartitionKeyCondition: QueryConditionEquals,
-		SortKeyCondition:      QueryConditionNone,
+func (d *DynamoDB) Update(key string, value any, options ...SetOptions) error {
+	opts := getSetOptions(options...)
+
+	// Build key for the item to update
+	keys := map[string]types.AttributeValue{
+		d.partitionKeyAttribute: &types.AttributeValueMemberS{Value: key},
 	}
 
-	opts := defaultOpts
-
-	if len(options) > 0 {
-		opts = options[0]
-		utils.MergeObjects(&opts, defaultOpts)
+	if d.sortKeyAttribute != "" {
+		keys[d.sortKeyAttribute] = &types.AttributeValueMemberS{Value: utils.StringOrDefault(opts.SortKey, "null")}
 	}
 
-	return opts
-}
-
-func getSetOptions(options ...SetOptions) SetOptions {
-	if len(options) > 0 {
-		return options[0]
+	// Marshal the update value to get attribute values
+	updateValues, err := attributevalue.MarshalMap(value)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update value: %w", err)
 	}
-	return SetOptions{}
+
+	// Build update expression components
+	var updateExpressions []string
+	expressionAttributeNames := make(map[string]string)
+	expressionAttributeValues := make(map[string]types.AttributeValue)
+
+	// Counter for placeholder names to avoid conflicts
+	counter := 0
+
+	for attrName, attrValue := range updateValues {
+		// Skip key attributes - can't update them
+		if attrName == d.partitionKeyAttribute || attrName == d.sortKeyAttribute {
+			continue
+		}
+
+		// Create placeholders for attribute names and values
+		namePlaceholder := fmt.Sprintf("#attr%d", counter)
+		valuePlaceholder := fmt.Sprintf(":val%d", counter)
+
+		expressionAttributeNames[namePlaceholder] = attrName
+		expressionAttributeValues[valuePlaceholder] = attrValue
+		updateExpressions = append(updateExpressions, fmt.Sprintf("%s = %s", namePlaceholder, valuePlaceholder))
+
+		counter++
+	}
+
+	// Handle TTL if expiration is set
+	if opts.Expiration > 0 {
+		ttl := time.Now().Add(opts.Expiration).Unix()
+		ttlPlaceholder := fmt.Sprintf("#attr%d", counter)
+		ttlValuePlaceholder := fmt.Sprintf(":val%d", counter)
+
+		expressionAttributeNames[ttlPlaceholder] = d.ttlAttribute
+		expressionAttributeValues[ttlValuePlaceholder] = &types.AttributeValueMemberN{Value: strconv.FormatInt(ttl, 10)}
+		updateExpressions = append(updateExpressions, fmt.Sprintf("%s = %s", ttlPlaceholder, ttlValuePlaceholder))
+	}
+
+	if len(updateExpressions) == 0 {
+		return fmt.Errorf("no attributes to update")
+	}
+
+	// Build the complete update expression
+	updateExpression := "SET " + fmt.Sprintf("%s", updateExpressions[0])
+	for i := 1; i < len(updateExpressions); i++ {
+		updateExpression += ", " + updateExpressions[i]
+	}
+
+	// Create the UpdateItem input
+	input := &dynamodb.UpdateItemInput{
+		TableName:                 aws.String(d.tableName),
+		Key:                      keys,
+		UpdateExpression:         aws.String(updateExpression),
+		ExpressionAttributeNames:  expressionAttributeNames,
+		ExpressionAttributeValues: expressionAttributeValues,
+		ReturnValues:             types.ReturnValueNone, // Don't return the updated item
+	}
+
+	// Execute the update
+	_, err = d.client.UpdateItem(context.Background(), input)
+	if err != nil {
+		return fmt.Errorf("failed to update item in dynamodb: %w", err)
+	}
+
+	return nil
 }
 
 func (d *DynamoDB) Put(key string, value any, options ...SetOptions) error {
@@ -359,47 +374,6 @@ func (d *DynamoDB) Delete(key string) error {
 	}
 
 	return nil
-}
-
-func (d *DynamoDB) GetListWithPrefix(id string, skPrefix string, limit int64) ([]string, error) {
-	var values []string
-	now := time.Now().Unix()
-
-	input := &dynamodb.QueryInput{
-		TableName:              aws.String(d.tableName),
-		KeyConditionExpression: aws.String("#id = :id AND begins_with(#sk, :prefix)"),
-		ExpressionAttributeNames: map[string]string{
-			"#id": d.partitionKeyAttribute,
-			"#sk": d.sortKeyAttribute,
-		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":id":     &types.AttributeValueMemberS{Value: id},
-			":prefix": &types.AttributeValueMemberS{Value: skPrefix},
-		},
-	}
-
-	result, err := d.client.Query(context.Background(), input)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to query dynamodb: %w", err)
-	}
-
-	for _, item := range result.Items {
-		var expirationTime int64
-		_ = attributevalue.Unmarshal(item[d.ttlAttribute], &expirationTime)
-
-		if expirationTime > 0 && now > expirationTime {
-			continue
-		}
-
-		var value string
-		err := attributevalue.Unmarshal(item[d.valueAttribute], &value)
-		if err == nil {
-			values = append(values, value)
-		}
-	}
-
-	return values, nil
 }
 
 func Get[T any](tableName string, key string, options ...GetOptions) (T, error) {
