@@ -12,7 +12,7 @@ type Person struct {
 	Email string `json:"email" dynamodbav:"email"`
 }
 
-func TestGeneric(t *testing.T) {
+func TestGenericAttributes(t *testing.T) {
 
 	_, err := New(DbOptions{
 		TableName:        "dynamo.test",
@@ -38,6 +38,53 @@ func TestGeneric(t *testing.T) {
 	}
 
 	fmt.Println("Returned value: ", value)
+
+	expected := Person{
+		Name:  "John Doe",
+		Email: "john.doe@example.com",
+	}
+
+	if value != expected {
+		t.Fatalf("Expected %v, got %v", expected, value)
+	}
+
+	fmt.Println("Test passed")
+}
+
+func TestGenericJson(t *testing.T) {
+
+	_, err := New(DbOptions{
+		TableName:        "dynamo.test",
+		ValueStoreMode:   ValueStoreModeJson,
+		SortKeyAttribute: "group_id",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to initialize table: %v", err)
+	}
+
+	Put("dynamo.test", "test_generic", Person{
+		Name:  "John Doe",
+		Email: "john.doe@example.com",
+	}, SetOptions{
+		Expiration: 1 * time.Minute,
+	})
+
+	value, err := GetString("dynamo.test", "test_generic")
+
+	if err != nil {
+		t.Fatalf("Failed to get value: %v", err)
+	}
+
+	fmt.Println("Returned value: ", value)
+
+	expected := `{"name":"John Doe","email":"john.doe@example.com"}`
+
+	if value != expected {
+		t.Fatalf("Expected %v, got %v", expected, value)
+	}
+
+	fmt.Println("Test passed")
 }
 
 func TestGetString(t *testing.T) {

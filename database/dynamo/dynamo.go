@@ -376,7 +376,7 @@ func (d *DynamoDB) Delete(key string) error {
 	return nil
 }
 
-func Get[T any](tableName string, key string, options ...GetOptions) (T, error) {
+func Get[T any](tableName string, key string, sortKey ...string) (T, error) {
 
 	var value T
 
@@ -391,12 +391,11 @@ func Get[T any](tableName string, key string, options ...GetOptions) (T, error) 
 	}
 
 	//update the options with the result type
-	if len(options) > 0 {
-		opts := options[0]
-		opts.Result = &value
+	if len(sortKey) > 0 {
+		opts.SortKey = sortKey[0]
 	}
 
-	valueInterface, err := table.Get(key, []GetOptions{opts}...)
+	valueInterface, err := table.Get(key, opts)
 
 	if err != nil {
 		return value, err
