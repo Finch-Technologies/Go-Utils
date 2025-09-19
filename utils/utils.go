@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	rand2 "math/rand/v2"
+	"reflect"
 	"regexp"
 	"runtime/debug"
 	"strconv"
@@ -278,4 +279,32 @@ func ParseTimeout(s string) time.Duration {
 		return 30 * time.Second // default
 	}
 	return duration
+}
+
+/*
+MergeObjects merges two objects of the same type.
+It will iterate over the fields of the object and set the value of objA to the value of objB if the value of objA is the zero value.
+*/
+func MergeObjects[T any](objA *T, objB T) {
+
+	//If objA type is not a pointer to a struct, return
+	if reflect.TypeOf(objA).Kind() != reflect.Ptr || reflect.TypeOf(objA).Elem().Kind() != reflect.Struct {
+		return
+	}
+
+	if objA == nil {
+		return
+	}
+
+	//Iterate over the fields of the object and set the value to the default value if the value is the zero value
+	fields := reflect.TypeOf(objA).Elem()
+	objAValue := reflect.ValueOf(objA).Elem()
+	objBValue := reflect.ValueOf(objB)
+
+	for i := 0; i < fields.NumField(); i++ {
+		field := fields.Field(i)
+		if objAValue.Field(i).Interface() == reflect.Zero(field.Type).Interface() {
+			objAValue.Field(i).Set(objBValue.Field(i))
+		}
+	}
 }

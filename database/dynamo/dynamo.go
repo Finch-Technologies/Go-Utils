@@ -44,19 +44,8 @@ func getOptions(options ...DbOptions) DbOptions {
 	opts := defaultOpts
 
 	if len(options) > 0 {
-		opts = DbOptions{
-			Region:                utils.StringOrDefault(options[0].Region, defaultOpts.Region),
-			TableName:             options[0].TableName,
-			PartitionKeyAttribute: utils.StringOrDefault(options[0].PartitionKeyAttribute, defaultOpts.PartitionKeyAttribute),
-			TtlAttribute:          utils.StringOrDefault(options[0].TtlAttribute, defaultOpts.TtlAttribute),
-			SortKeyAttribute:      utils.StringOrDefault(options[0].SortKeyAttribute, defaultOpts.SortKeyAttribute),
-			ValueAttribute:        utils.StringOrDefault(options[0].ValueAttribute, defaultOpts.ValueAttribute),
-			ValueStoreMode:        defaultOpts.ValueStoreMode,
-		}
-
-		if options[0].ValueStoreMode != "" {
-			opts.ValueStoreMode = options[0].ValueStoreMode
-		}
+		opts = options[0]
+		utils.MergeObjects(&opts, defaultOpts)
 	}
 
 	return opts
