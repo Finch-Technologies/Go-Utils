@@ -19,16 +19,6 @@ import (
 	"github.com/finch-technologies/go-utils/utils"
 )
 
-type DynamoDB struct {
-	client                *dynamodb.Client
-	tableName             string
-	partitionKeyAttribute string
-	ttlAttribute          string
-	sortKeyAttribute      string
-	valueStoreMode        ValueStoreMode
-	valueAttribute        string
-}
-
 var tableMap map[string]*DynamoDB = make(map[string]*DynamoDB)
 
 func getOptions(options ...DbOptions) DbOptions {
@@ -91,22 +81,17 @@ func getTable(tableName string) (*DynamoDB, error) {
 	return table, nil
 }
 
-type GetOptions struct {
-	SortKey string
-	Result  interface{}
-}
-
 func getGetOptions(options ...GetOptions) GetOptions {
-	opts := GetOptions{
-		Result: &map[string]interface{}{},
+	defaultOpts := GetOptions{
+		Result: map[string]interface{}{},
 	}
+
+	opts := defaultOpts
 
 	if len(options) > 0 {
 		opts = options[0]
 
-		if opts.Result == nil {
-			opts.Result = &map[string]interface{}{}
-		}
+		utils.MergeObjects(&opts, defaultOpts)
 	}
 
 	return opts
@@ -145,7 +130,11 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
 	now := time.Now().Unix()
 
 	if err == nil && expirationTime > 0 && now > expirationTime {
-		return nil, nil
+		if d.valueStoreMode == ValueStoreModeJson {
+			return "", nil
+		} else {
+			return nil, nil
+		}
 	}
 
 	if d.valueStoreMode == ValueStoreModeJson {
@@ -159,7 +148,7 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
 
 		return resultItem[d.valueAttribute], nil
 	} else {
-		err = attributevalue.UnmarshalMap(result.Item, opts.Result)
+		err = attributevalue.UnmarshalMap(result.Item, &opts.Result)
 		if err != nil {
 			log.Error("Failed to unmarshal DynamoDB item: ", err)
 			return nil, err
@@ -168,9 +157,120 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
 	}
 }
 
-type SetOptions struct {
-	Expiration time.Duration
-	SortKey    string
+func (d *DynamoDB) Query(key string, options ...QueryOptions) (interface{}, error) {
+	opts := getQueryOptions(options...)
+	now := time.Now().Unix()
+
+	// Build key condition expression
+	keyConditionExpression := fmt.Sprintf("#pk = :pk")
+	expressionAttributeNames := map[string]string{
+		"#pk": d.partitionKeyAttribute,
+	}
+	expressionAttributeValues := map[string]types.AttributeValue{
+		":pk": &types.AttributeValueMemberS{Value: key},
+	}
+
+	// Add sort key condition if specified
+	if d.sortKeyAttribute != "" && opts.SortKeyCondition != QueryConditionNone {
+		expressionAttributeNames["#sk"] = d.sortKeyAttribute
+
+		switch opts.SortKeyCondition {
+		case QueryConditionEquals:
+			keyConditionExpression += " AND #sk = :sk"
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+		case QueryConditionBeginsWith:
+			keyConditionExpression += " AND begins_with(#sk, :sk)"
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+		case QueryConditionGreaterThan:
+			keyConditionExpression += " AND #sk > :sk"
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+		case QueryConditionLessThan:
+			keyConditionExpression += " AND #sk < :sk"
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+		case QueryConditionGreaterThanOrEqualTo:
+			keyConditionExpression += " AND #sk >= :sk"
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+		case QueryConditionLessThanOrEqualTo:
+			keyConditionExpression += " AND #sk <= :sk"
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+		default:
+			return nil, fmt.Errorf("unsupported sort key condition: %s", opts.SortKeyCondition)
+		}
+	}
+
+	input := &dynamodb.QueryInput{
+		TableName:                 aws.String(d.tableName),
+		KeyConditionExpression:    aws.String(keyConditionExpression),
+		ExpressionAttributeNames:  expressionAttributeNames,
+		ExpressionAttributeValues: expressionAttributeValues,
+	}
+
+	result, err := d.client.Query(context.Background(), input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query dynamodb: %w", err)
+	}
+
+	var items []interface{}
+
+	for _, item := range result.Items {
+		// Check expiration time
+		var expirationTime int64
+		err = attributevalue.Unmarshal(item[d.ttlAttribute], &expirationTime)
+		if err == nil && expirationTime > 0 && now > expirationTime {
+			continue // Skip expired items
+		}
+
+		if d.valueStoreMode == ValueStoreModeJson {
+			// Handle JSON value store mode
+			var resultItem map[string]interface{}
+			err = attributevalue.UnmarshalMap(item, &resultItem)
+			if err != nil {
+				log.Error("Failed to unmarshal DynamoDB item: ", err)
+				continue
+			}
+			items = append(items, resultItem[d.valueAttribute])
+		} else {
+			// Handle attribute value store mode
+			var resultItem interface{}
+			if opts.Result != nil {
+				// Create a new instance of the same type as opts.Result
+				resultType := reflect.TypeOf(opts.Result)
+				if resultType.Kind() == reflect.Ptr {
+					resultItem = reflect.New(resultType.Elem()).Interface()
+				} else {
+					resultItem = reflect.New(resultType).Interface()
+				}
+			} else {
+				resultItem = make(map[string]interface{})
+			}
+
+			err = attributevalue.UnmarshalMap(item, resultItem)
+			if err != nil {
+				log.Error("Failed to unmarshal DynamoDB item: ", err)
+				continue
+			}
+			items = append(items, resultItem)
+		}
+	}
+
+	return items, nil
+}
+
+func getQueryOptions(options ...QueryOptions) QueryOptions {
+	defaultOpts := QueryOptions{
+		Result:                map[string]interface{}{},
+		PartitionKeyCondition: QueryConditionEquals,
+		SortKeyCondition:      QueryConditionNone,
+	}
+
+	opts := defaultOpts
+
+	if len(options) > 0 {
+		opts = options[0]
+		utils.MergeObjects(&opts, defaultOpts)
+	}
+
+	return opts
 }
 
 func getSetOptions(options ...SetOptions) SetOptions {
@@ -180,7 +280,7 @@ func getSetOptions(options ...SetOptions) SetOptions {
 	return SetOptions{}
 }
 
-func (d *DynamoDB) Set(key string, value any, options ...SetOptions) error {
+func (d *DynamoDB) Put(key string, value any, options ...SetOptions) error {
 
 	opts := getSetOptions(options...)
 
@@ -197,7 +297,7 @@ func (d *DynamoDB) Set(key string, value any, options ...SetOptions) error {
 
 		t := reflect.TypeOf(value).Kind()
 
-		if t == reflect.Struct || t == reflect.Interface || t == reflect.Map || t == reflect.Slice || t == reflect.Array {
+		if t == reflect.Struct || t == reflect.Ptr || t == reflect.Interface || t == reflect.Map || t == reflect.Slice || t == reflect.Array {
 			bytes, err := json.Marshal(value)
 			if err != nil {
 				return fmt.Errorf("failed to marshal payload: %w", err)
@@ -367,14 +467,14 @@ func GetInt(tableName, key string) (int, error) {
 	return value, nil
 }
 
-func Set(tableName, key string, value any, options ...SetOptions) error {
+func Put(tableName, key string, value any, options ...SetOptions) error {
 	table, err := getTable(tableName)
 
 	if err != nil {
 		return err
 	}
 
-	table.Set(key, value, options...)
+	table.Put(key, value, options...)
 
 	return nil
 }
