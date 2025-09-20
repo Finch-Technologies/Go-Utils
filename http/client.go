@@ -95,7 +95,11 @@ func (c *Client) doDirectRequest(ctx context.Context, opts RequestOptions) (*Res
 	client := &http.Client{
 		Timeout: c.timeout,
 		Transport: &http.Transport{
-			TLSClientConfig: c.tlsConfig,
+			TLSClientConfig:     c.tlsConfig,
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+			DisableKeepAlives:   false,
 		},
 	}
 
@@ -170,8 +174,12 @@ func (c *Client) doHTTPProxy(ctx context.Context, opts RequestOptions, proxyURL 
 	}
 
 	transport := &http.Transport{
-		Proxy:           http.ProxyURL(proxyURL),
-		TLSClientConfig: c.tlsConfig,
+		Proxy:               http.ProxyURL(proxyURL),
+		TLSClientConfig:     c.tlsConfig,
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		DisableKeepAlives:   false,
 	}
 
 	client := &http.Client{
@@ -229,7 +237,8 @@ func (c *Client) doHTTPSProxy(ctx context.Context, opts RequestOptions, proxyURL
 	}
 
 	dialer := &net.Dialer{
-		Timeout: c.timeout,
+		Timeout:   c.timeout,
+		KeepAlive: 30 * time.Second,
 	}
 
 	conn, err := dialer.DialContext(ctx, "tcp", proxyAddr)
@@ -283,6 +292,8 @@ func (c *Client) doHTTPSProxy(ctx context.Context, opts RequestOptions, proxyURL
 	tlsConfig.ServerName = targetURL.Hostname()
 
 	tlsConn := tls.Client(conn, tlsConfig)
+	defer tlsConn.Close() // Ensure TLS connection is properly closed
+
 	err = tlsConn.HandshakeContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("TLS handshake failed: %w", err)
