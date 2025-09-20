@@ -179,3 +179,13 @@ func (z *ZeroLogger) ErrorFields(msg string, fields map[string]interface{}) {
 	}
 	event.Msg(msg)
 }
+
+// Fatal logs a fatal level message and then calls os.Exit(1).
+func (z *ZeroLogger) Fatal(v ...any) {
+	z.logger.Fatal().Msg(fmt.Sprint(v...))
+}
+
+// Fatalf logs a formatted fatal level message and then calls os.Exit(1).
+func (z *ZeroLogger) Fatalf(s string, v ...any) {
+	z.logger.Fatal().Msg(fmt.Sprintf(s, v...))
+}

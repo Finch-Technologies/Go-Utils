@@ -73,6 +73,14 @@ func ErrorFields(msg string, fields map[string]interface{}) {
 	logger.ErrorFields(msg, fields)
 }
 
+func Fatal(v ...any) {
+	logger.Fatal(v...)
+}
+
+func Fatalf(s string, v ...any) {
+	logger.Fatalf(s, v...)
+}
+
 func GetContext() context.Context {
 	return logger.GetContext()
 }

@@ -21,5 +21,7 @@ type LoggerInterface interface {
 	DebugFields(msg string, fields map[string]any)
 	InfoFields(msg string, fields map[string]interface{})
 	ErrorFields(msg string, fields map[string]interface{})
+	Fatal(v ...any)
+	Fatalf(s string, v ...any)
 	GetContext() context.Context
 }
