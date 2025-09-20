@@ -209,6 +209,13 @@ func TryCatch(f func(), catch func(e error, stackTrace string)) {
 	f()
 }
 
+func DurationOrDefault(value, defaultValue time.Duration) time.Duration {
+	if value == 0 {
+		return defaultValue
+	}
+	return value
+}
+
 func StringOrDefault(value, defaultValue string) string {
 	if value == "" {
 		return defaultValue

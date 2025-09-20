@@ -21,6 +21,7 @@ type DynamoDB struct {
 	sortKeyAttribute      string
 	valueStoreMode        ValueStoreMode
 	valueAttribute        string
+	ttl                   time.Duration
 }
 
 type DbOptions struct {
@@ -31,6 +32,7 @@ type DbOptions struct {
 	SortKeyAttribute      string
 	ValueStoreMode        ValueStoreMode
 	ValueAttribute        string
+	Ttl                   time.Duration
 }
 
 type GetOptions struct {
@@ -39,8 +41,8 @@ type GetOptions struct {
 }
 
 type SetOptions struct {
-	Expiration time.Duration
-	SortKey    string
+	Ttl     time.Duration
+	SortKey string
 }
 
 type QueryCondition string

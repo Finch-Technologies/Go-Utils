@@ -1,10 +1,13 @@
 package dynamo
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/finch-technologies/go-utils/utils"
 )
 
 type Person struct {
@@ -28,7 +31,7 @@ func TestGenericAttributes(t *testing.T) {
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
 	}, SetOptions{
-		Expiration: 1 * time.Minute,
+		Ttl: 1 * time.Minute,
 	})
 
 	value, err := Get[Person]("dynamo.test", "test_generic")
@@ -44,7 +47,7 @@ func TestGenericAttributes(t *testing.T) {
 		Email: "john.doe@example.com",
 	}
 
-	if value != expected {
+	if value == nil || value.Name != expected.Name || value.Email != expected.Email {
 		t.Fatalf("Expected %v, got %v", expected, value)
 	}
 
@@ -67,7 +70,7 @@ func TestGenericJson(t *testing.T) {
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
 	}, SetOptions{
-		Expiration: 1 * time.Minute,
+		Ttl: 1 * time.Minute,
 	})
 
 	value, err := GetString("dynamo.test", "test_generic")
@@ -87,6 +90,75 @@ func TestGenericJson(t *testing.T) {
 	fmt.Println("Test passed")
 }
 
+func TestGenericGetString(t *testing.T) {
+
+	_, err := New(DbOptions{
+		TableName:        "dynamo.test",
+		SortKeyAttribute: "group_id",
+		Ttl:              1 * time.Minute,
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to initialize table: %v", err)
+	}
+
+	Put("dynamo.test", "test_generic_string", "test")
+
+	value, err := GetString("dynamo.test", "test_generic_string")
+
+	if err != nil {
+		t.Fatalf("Failed to get value: %v", err)
+	}
+
+	expected := "test"
+
+	if value != expected {
+		t.Fatalf("Expected %v, got %v", expected, value)
+	}
+
+	fmt.Println("Test passed")
+}
+
+func TestGenericDelete(t *testing.T) {
+
+	_, err := New(DbOptions{
+		TableName:        "dynamo.test",
+		ValueStoreMode:   ValueStoreModeAttributes,
+		SortKeyAttribute: "group_id",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to initialize table: %v", err)
+	}
+
+	Put("dynamo.test", "test_generic_delete", Person{
+		Name:  "John Doe",
+		Email: "john.doe@example.com",
+	}, SetOptions{
+		Ttl: 1 * time.Minute,
+	})
+
+	utils.Sleep(context.Background(), 2*time.Second)
+
+	err = Delete("dynamo.test", "test_generic_delete")
+
+	if err != nil {
+		t.Fatalf("Failed to delete value: %v", err)
+	}
+
+	value, err := Get[Person]("dynamo.test", "test_generic")
+
+	if err != nil {
+		t.Fatalf("Failed to get value: %v", err)
+	}
+
+	if value != nil {
+		t.Fatalf("Expected %v, got %v", nil, value)
+	}
+
+	fmt.Println("Test passed")
+}
+
 func TestGetString(t *testing.T) {
 
 	table, err := New(DbOptions{
@@ -100,7 +172,7 @@ func TestGetString(t *testing.T) {
 	}
 
 	err = table.Put("test_string", "test", SetOptions{
-		Expiration: 1 * time.Minute,
+		Ttl: 1 * time.Minute,
 	})
 
 	if err != nil {
@@ -140,7 +212,7 @@ func TestGetJson(t *testing.T) {
 	}
 
 	err = table.Put("test_json", s, SetOptions{
-		Expiration: 1 * time.Minute,
+		Ttl: 1 * time.Minute,
 	})
 
 	if err != nil {
@@ -180,7 +252,7 @@ func TestGetAttributes(t *testing.T) {
 	}
 
 	err = table.Put("test_attributes", expected, SetOptions{
-		Expiration: 1 * time.Minute,
+		Ttl: 1 * time.Minute,
 	})
 
 	if err != nil {
@@ -220,7 +292,7 @@ func TestGetJsonWithExpiry(t *testing.T) {
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
 	}, SetOptions{
-		Expiration: 5 * time.Second,
+		Ttl: 5 * time.Second,
 	})
 
 	if err != nil {
@@ -269,8 +341,8 @@ func TestQueryBasic(t *testing.T) {
 
 	for _, item := range testItems {
 		err = table.Put(item.pk, item.data, SetOptions{
-			SortKey:    item.sk,
-			Expiration: 1 * time.Minute,
+			SortKey: item.sk,
+			Ttl:     1 * time.Minute,
 		})
 		if err != nil {
 			t.Fatalf("Failed to put item %s/%s: %v", item.pk, item.sk, err)
@@ -316,8 +388,8 @@ func TestQueryWithSortKeyConditions(t *testing.T) {
 
 	for _, item := range testItems {
 		err = table.Put(item.pk, item.data, SetOptions{
-			SortKey:    item.sk,
-			Expiration: 1 * time.Minute,
+			SortKey: item.sk,
+			Ttl:     1 * time.Minute,
 		})
 		if err != nil {
 			t.Fatalf("Failed to put item %s/%s: %v", item.pk, item.sk, err)
@@ -392,8 +464,8 @@ func TestQueryWithAttributes(t *testing.T) {
 
 	for _, item := range testPersons {
 		err = table.Put(item.pk, item.data, SetOptions{
-			SortKey:    item.sk,
-			Expiration: 1 * time.Minute,
+			SortKey: item.sk,
+			Ttl:     1 * time.Minute,
 		})
 		if err != nil {
 			t.Fatalf("Failed to put person %s/%s: %v", item.pk, item.sk, err)
@@ -438,16 +510,16 @@ func TestQueryWithExpiredItems(t *testing.T) {
 
 	// Insert items with short expiration
 	err = table.Put("user789", "valid_data", SetOptions{
-		SortKey:    "valid",
-		Expiration: 1 * time.Minute, // Valid for a minute
+		SortKey: "valid",
+		Ttl:     1 * time.Minute, // Valid for a minute
 	})
 	if err != nil {
 		t.Fatalf("Failed to put valid item: %v", err)
 	}
 
 	err = table.Put("user789", "expired_data", SetOptions{
-		SortKey:    "expired",
-		Expiration: 1 * time.Second, // Will expire soon
+		SortKey: "expired",
+		Ttl:     1 * time.Second, // Will expire soon
 	})
 	if err != nil {
 		t.Fatalf("Failed to put expired item: %v", err)
@@ -521,8 +593,8 @@ func TestUpdateAttributes(t *testing.T) {
 	}
 
 	err = table.Put("update_test", original, SetOptions{
-		SortKey:    "person1",
-		Expiration: 1 * time.Minute,
+		SortKey: "person1",
+		Ttl:     1 * time.Minute,
 	})
 	if err != nil {
 		t.Fatalf("Failed to put initial person: %v", err)
@@ -583,8 +655,8 @@ func TestUpdateWithTTL(t *testing.T) {
 	}
 
 	err = table.Put("ttl_update_test", initial, SetOptions{
-		SortKey:    "person2",
-		Expiration: 5 * time.Minute,
+		SortKey: "person2",
+		Ttl:     5 * time.Minute,
 	})
 	if err != nil {
 		t.Fatalf("Failed to put initial item: %v", err)
@@ -598,8 +670,8 @@ func TestUpdateWithTTL(t *testing.T) {
 	}
 
 	err = table.Update("ttl_update_test", update, SetOptions{
-		SortKey:    "person2",
-		Expiration: 10 * time.Second, // Short expiration for testing
+		SortKey: "person2",
+		Ttl:     10 * time.Second, // Short expiration for testing
 	})
 	if err != nil {
 		t.Fatalf("Failed to update with TTL: %v", err)
@@ -640,8 +712,8 @@ func TestUpdateMultipleFields(t *testing.T) {
 	}
 
 	err = table.Put("multi_update_test", initial, SetOptions{
-		SortKey:    "person3",
-		Expiration: 1 * time.Minute,
+		SortKey: "person3",
+		Ttl:     1 * time.Minute,
 	})
 	if err != nil {
 		t.Fatalf("Failed to put initial item: %v", err)

@@ -42,6 +42,7 @@ func getOptions(options ...DbOptions) DbOptions {
 		SortKeyAttribute:      "",
 		ValueStoreMode:        ValueStoreModeJson,
 		ValueAttribute:        "value",
+		Ttl:                   0,
 	}
 
 	opts := defaultOpts

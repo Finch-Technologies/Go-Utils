@@ -3,7 +3,6 @@ package dynamo
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -42,6 +41,7 @@ func New(options ...DbOptions) (*DynamoDB, error) {
 		sortKeyAttribute:      opts.SortKeyAttribute,
 		valueStoreMode:        opts.ValueStoreMode,
 		valueAttribute:        opts.ValueAttribute,
+		ttl:                   opts.Ttl,
 	}
 
 	tableMap[opts.TableName] = d
@@ -255,15 +255,17 @@ func (d *DynamoDB) Update(key string, value any, options ...SetOptions) error {
 		counter++
 	}
 
-	// Handle TTL if expiration is set
-	if opts.Expiration > 0 {
-		ttl := time.Now().Add(opts.Expiration).Unix()
-		ttlPlaceholder := fmt.Sprintf("#attr%d", counter)
-		ttlValuePlaceholder := fmt.Sprintf(":val%d", counter)
+	ttl := utils.DurationOrDefault(opts.Ttl, d.ttl)
 
-		expressionAttributeNames[ttlPlaceholder] = d.ttlAttribute
-		expressionAttributeValues[ttlValuePlaceholder] = &types.AttributeValueMemberN{Value: strconv.FormatInt(ttl, 10)}
-		updateExpressions = append(updateExpressions, fmt.Sprintf("%s = %s", ttlPlaceholder, ttlValuePlaceholder))
+	// Handle TTL if expiration is set
+	if ttl > 0 {
+		expiryTime := time.Now().Add(ttl).Unix()
+		expiryPlaceholder := fmt.Sprintf("#attr%d", counter)
+		expiryValuePlaceholder := fmt.Sprintf(":val%d", counter)
+
+		expressionAttributeNames[expiryPlaceholder] = d.ttlAttribute
+		expressionAttributeValues[expiryValuePlaceholder] = &types.AttributeValueMemberN{Value: strconv.FormatInt(expiryTime, 10)}
+		updateExpressions = append(updateExpressions, fmt.Sprintf("%s = %s", expiryPlaceholder, expiryValuePlaceholder))
 	}
 
 	if len(updateExpressions) == 0 {
@@ -343,9 +345,11 @@ func (d *DynamoDB) Put(key string, value any, options ...SetOptions) error {
 		}
 	}
 
-	if opts.Expiration > 0 {
-		ttl := time.Now().Add(opts.Expiration).Unix()
-		item[d.ttlAttribute] = &types.AttributeValueMemberN{Value: strconv.FormatInt(ttl, 10)}
+	ttl := utils.DurationOrDefault(opts.Ttl, d.ttl)
+
+	if ttl > 0 {
+		expiryTime := time.Now().Add(ttl).Unix()
+		item[d.ttlAttribute] = &types.AttributeValueMemberN{Value: strconv.FormatInt(expiryTime, 10)}
 	}
 
 	_, err := d.client.PutItem(context.Background(), &dynamodb.PutItemInput{
@@ -360,14 +364,26 @@ func (d *DynamoDB) Put(key string, value any, options ...SetOptions) error {
 	return nil
 }
 
-func (d *DynamoDB) Delete(key string) error {
-	_, err := d.client.DeleteItem(context.Background(), &dynamodb.DeleteItemInput{
+func (d *DynamoDB) Delete(key string, sortKey ...string) error {
+
+	sk := "null"
+
+	if len(sortKey) > 0 {
+		sk = sortKey[0]
+	}
+
+	deleteInput := &dynamodb.DeleteItemInput{
 		TableName: aws.String(d.tableName),
 		Key: map[string]types.AttributeValue{
 			d.partitionKeyAttribute: &types.AttributeValueMemberS{Value: key},
 		},
-	},
-	)
+	}
+
+	if d.sortKeyAttribute != "" {
+		deleteInput.Key[d.sortKeyAttribute] = &types.AttributeValueMemberS{Value: sk}
+	}
+
+	_, err := d.client.DeleteItem(context.Background(), deleteInput)
 
 	if err != nil {
 		return fmt.Errorf("failed to delete key from dynamodb: %s", err)
@@ -376,14 +392,14 @@ func (d *DynamoDB) Delete(key string) error {
 	return nil
 }
 
-func Get[T any](tableName string, key string, sortKey ...string) (T, error) {
+func Get[T any](tableName string, key string, sortKey ...string) (*T, error) {
 
 	var value T
 
 	table, err := getTable(tableName)
 
 	if err != nil {
-		return value, err
+		return nil, err
 	}
 
 	opts := GetOptions{
@@ -398,7 +414,7 @@ func Get[T any](tableName string, key string, sortKey ...string) (T, error) {
 	valueInterface, err := table.Get(key, opts)
 
 	if err != nil {
-		return value, err
+		return nil, err
 	}
 
 	if table.valueStoreMode == ValueStoreModeJson {
@@ -406,15 +422,18 @@ func Get[T any](tableName string, key string, sortKey ...string) (T, error) {
 		valueStr := valueInterface.(string)
 
 		if valueStr == "" {
-			return value, errors.New("item not found in database")
+			return nil, nil
 		}
 
 		err = json.Unmarshal([]byte(valueStr), &value)
 	} else {
+		if valueInterface == nil {
+			return nil, nil
+		}
 		value = *valueInterface.(*T)
 	}
 
-	return value, err
+	return &value, err
 }
 
 func GetString(tableName, key string) (string, error) {
@@ -467,12 +486,12 @@ func Put(tableName, key string, value any, options ...SetOptions) error {
 	return nil
 }
 
-func Delete(tableName, key string) error {
+func Delete(tableName, key string, sortKey ...string) error {
 	table, err := getTable(tableName)
 
 	if err != nil {
 		return err
 	}
 
-	return table.Delete(key)
+	return table.Delete(key, sortKey...)
 }
