@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/finch-technologies/go-utils/queue/redis"
 	"github.com/finch-technologies/go-utils/queue/sqs"
 	"github.com/finch-technologies/go-utils/queue/types"
+	"github.com/finch-technologies/go-utils/utils"
 )
 
 type Queue string
@@ -28,7 +30,9 @@ const (
 
 type QueueConfig struct {
 	Driver  QueueDriver
-	RedisDb int
+	RedisDb *int
+	Region  string
+	BaseUrl string
 }
 
 var mq IMessageQueue
@@ -42,20 +46,30 @@ func Init(config ...QueueConfig) error {
 		return fmt.Errorf("no queue config provided")
 	}
 
-	if config[0].RedisDb != 0 {
-		redisDb = config[0].RedisDb
+	if config[0].RedisDb != nil {
+		redisDb = *config[0].RedisDb
+	}
+
+	if config[0].Region == "" {
+		config[0].Region = utils.StringOrDefault(os.Getenv("AWS_REGION"), "af-south-1")
 	}
 
 	switch config[0].Driver {
 	case QueueDriverRedis:
 		mq = redis.New(redisDb) //queue db
 	case QueueDriverSQS:
-		mq, err = sqs.New()
+		if config[0].BaseUrl == "" {
+			return fmt.Errorf("sqs base url is required")
+		}
+		mq, err = sqs.New(sqs.SQSConfig{
+			Region:     config[0].Region,
+			SQSBaseUrl: config[0].BaseUrl,
+		})
 		if err != nil {
-			return fmt.Errorf("failed to create sqs message queue: %s", err)
+			return fmt.Errorf("failed to create sqs queue: %s", err)
 		}
 	default:
-		return fmt.Errorf("no valid message queue driver specified")
+		return fmt.Errorf("no valid queue driver specified")
 	}
 
 	return nil
@@ -64,7 +78,7 @@ func Init(config ...QueueConfig) error {
 func Count(ctx context.Context, queue Queue) (int, error) {
 
 	if mq == nil {
-		return 0, fmt.Errorf("no message queue driver found")
+		return 0, fmt.Errorf("no queue driver found")
 	}
 
 	return mq.Count(ctx, string(queue))
@@ -73,7 +87,7 @@ func Count(ctx context.Context, queue Queue) (int, error) {
 func Enqueue[T interface{}](ctx context.Context, queue Queue, payload T, options ...types.EnqueueOptions) error {
 
 	if mq == nil {
-		return fmt.Errorf("no message queue driver found")
+		return fmt.Errorf("no queue driver found")
 	}
 
 	jsonBytes, err := json.Marshal(payload)
@@ -90,7 +104,7 @@ func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.D
 	var messages []types.QueueMessage[T]
 
 	if mq == nil {
-		return messages, fmt.Errorf("no message queue driver found")
+		return messages, fmt.Errorf("no queue driver found")
 	}
 
 	dequeuedMessages, err := mq.Dequeue(ctx, string(queue), options...)
@@ -131,7 +145,7 @@ func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.D
 func Delete(ctx context.Context, queue Queue, id string) error {
 
 	if mq == nil {
-		return fmt.Errorf("no message queue driver found")
+		return fmt.Errorf("no queue driver found")
 	}
 
 	return mq.Delete(ctx, string(queue), id)

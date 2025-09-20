@@ -223,7 +223,6 @@ func FetchRaw(ctx context.Context, uri, method string, payload interface{}, opti
 	return httpResp, nil
 }
 
-
 func FetchData(ctx context.Context, apiURL, method, stage string, headers *http.Header, responseType string) (string, error) {
 	client := &http.Client{}
 

@@ -3,11 +3,13 @@ package storage
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/finch-technologies/go-utils/log"
 	"github.com/finch-technologies/go-utils/storage/filesystem"
 	"github.com/finch-technologies/go-utils/storage/s3"
 	"github.com/finch-technologies/go-utils/storage/types"
+	"github.com/finch-technologies/go-utils/utils"
 )
 
 type FileManager struct {
@@ -43,13 +45,26 @@ func Init(config ...StorageConfig) (*FileManager, error) {
 
 	cfg := getConfig(config...)
 
+	if cfg.Region == "" {
+		cfg.Region = utils.StringOrDefault(os.Getenv("AWS_REGION"), "af-south-1")
+	}
+
 	switch cfg.Type {
 	case StorageDiskS3:
+		if cfg.Bucket == "" {
+			return nil, fmt.Errorf("s3 bucket is required")
+		}
 		log.Debugf("Using S3 storage: %s", cfg.Bucket)
 		storage, err = s3.GetS3Storage(cfg.Bucket, cfg.Region)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create s3 storage: %s", err)
+		}
 	default:
 		log.Debugf("Using local storage: %s", cfg.Type)
 		storage, err = filesystem.GetLocalStorage()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create local storage: %s", err)
+		}
 	}
 
 	if err != nil {

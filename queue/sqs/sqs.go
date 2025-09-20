@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 
@@ -18,29 +17,30 @@ import (
 // SQSMessageQueue is a concrete implementation of IMessageQueue using AWS SQS.
 type SQSMessageQueue struct {
 	client *sqs.Client
+	config SQSConfig
 }
 
 // New initializes a new SQSQueue instance.
-func New() (*SQSMessageQueue, error) {
+func New(cfg SQSConfig) (*SQSMessageQueue, error) {
 
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(cfg.Region))
 	if err != nil {
 		return nil, fmt.Errorf("unable to load AWS SDK config: %w", err)
 	}
 
-	client := sqs.NewFromConfig(cfg)
-	return &SQSMessageQueue{client: client}, nil
+	client := sqs.NewFromConfig(awsCfg)
+	return &SQSMessageQueue{client: client, config: cfg}, nil
 }
 
 // getQueueURL retrieves the URL of the SQS queue by name.
-func getQueueURL(queueName string) string {
-	baseUrl := os.Getenv("AWS_SQS_BASE_URL")
+func (q *SQSMessageQueue) getQueueURL(queueName string) string {
+	baseUrl := q.config.SQSBaseUrl
 	return fmt.Sprintf("%s/%s", baseUrl, queueName)
 }
 
 // Count returns the number of messages in the specified queue.
 func (q *SQSMessageQueue) Count(ctx context.Context, queueName string) (int, error) {
-	url := getQueueURL(queueName)
+	url := q.getQueueURL(queueName)
 	resp, err := q.client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
 		QueueUrl: aws.String(url),
 		AttributeNames: []sqstypes.QueueAttributeName{
@@ -64,7 +64,7 @@ func (q *SQSMessageQueue) Count(ctx context.Context, queueName string) (int, err
 
 // Enqueue sends a message to the specified queue.
 func (q *SQSMessageQueue) Enqueue(ctx context.Context, queueName string, payload string, options ...types.EnqueueOptions) error {
-	url := getQueueURL(queueName)
+	url := q.getQueueURL(queueName)
 
 	opts := getEnqueueOptions(options)
 
@@ -110,7 +110,7 @@ func getDequeueOptions(options []types.DequeueOptions) types.DequeueOptions {
 // Dequeue receives a message from the specified queue and deletes it after processing.
 func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options ...types.DequeueOptions) ([]types.DequeuedMessage, error) {
 	opts := getDequeueOptions(options)
-	url := getQueueURL(queueName)
+	url := q.getQueueURL(queueName)
 
 	input := &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(url),
@@ -176,7 +176,7 @@ func (q *SQSMessageQueue) Dequeue(ctx context.Context, queueName string, options
 
 // Delete deletes a message from the specified queue.
 func (q *SQSMessageQueue) Delete(ctx context.Context, queueName string, id string) error {
-	url := getQueueURL(queueName)
+	url := q.getQueueURL(queueName)
 	_, err := q.client.DeleteMessage(context.Background(), &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(url),
 		ReceiptHandle: aws.String(id),

@@ -1,11 +1,11 @@
-package messaging
+package pubsub
 
 import (
 	"context"
 	"errors"
 	"os"
 
-	"github.com/finch-technologies/go-utils/messaging/redis"
+	"github.com/finch-technologies/go-utils/pubsub/redis"
 )
 
 type IMessageBroker interface {
