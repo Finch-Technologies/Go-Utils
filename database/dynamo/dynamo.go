@@ -314,21 +314,22 @@ func (d *DynamoDB) Put(key string, value any, options ...SetOptions) error {
 
 		t := reflect.TypeOf(value).Kind()
 
-		if t == reflect.Struct || t == reflect.Ptr || t == reflect.Interface || t == reflect.Map || t == reflect.Slice || t == reflect.Array {
+		switch t {
+		case reflect.Struct, reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice, reflect.Array:
 			bytes, err := json.Marshal(value)
 			if err != nil {
 				return fmt.Errorf("failed to marshal payload: %w", err)
 			}
 			payload = string(bytes)
-		} else if t == reflect.String {
+		case reflect.String:
 			payload = value.(string)
-		} else if t == reflect.Int || t == reflect.Int8 || t == reflect.Int16 || t == reflect.Int32 || t == reflect.Int64 {
-			payload = strconv.FormatInt(value.(int64), 10)
-		} else if t == reflect.Float32 || t == reflect.Float64 {
-			payload = strconv.FormatFloat(value.(float64), 'f', -1, 64)
-		} else if t == reflect.Bool {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			payload = strconv.FormatInt(reflect.ValueOf(value).Int(), 10)
+		case reflect.Float32, reflect.Float64:
+			payload = strconv.FormatFloat(reflect.ValueOf(value).Float(), 'f', -1, 64)
+		case reflect.Bool:
 			payload = strconv.FormatBool(value.(bool))
-		} else {
+		default:
 			return fmt.Errorf("unsupported type: %v", t)
 		}
 
@@ -434,6 +435,34 @@ func Get[T any](tableName string, key string, sortKey ...string) (*T, error) {
 	}
 
 	return &value, err
+}
+
+func Query[T any](tableName string, key string, options ...QueryOptions) ([]T, error) {
+	table, err := getTable(tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	opts := getQueryOptions(options...)
+
+	var value T
+
+	opts.Result = &value
+
+	items, err := table.Query(key, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result []T
+
+	for _, item := range items {
+		result = append(result, *item.(*T))
+	}
+
+	return result, nil
 }
 
 func GetString(tableName, key string) (string, error) {

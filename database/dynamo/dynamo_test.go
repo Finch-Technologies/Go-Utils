@@ -119,6 +119,122 @@ func TestGenericGetString(t *testing.T) {
 	fmt.Println("Test passed")
 }
 
+func TestGenericQuery(t *testing.T) {
+
+	_, err := New(DbOptions{
+		TableName:        "dynamo.test",
+		ValueStoreMode:   ValueStoreModeAttributes,
+		SortKeyAttribute: "group_id",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to initialize table: %v", err)
+	}
+
+	Put("dynamo.test", "test_generic_query", Person{
+		Name:  "John Doe",
+		Email: "john.doe@example.com",
+	}, SetOptions{
+		Ttl: 1 * time.Minute,
+	})
+
+	results, err := Query[Person]("dynamo.test", "test_generic_query")
+
+	if err != nil {
+		t.Fatalf("Failed to query: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 item, got %d", len(results))
+	}
+
+	fmt.Println("Test passed")
+}
+
+func TestGenericQueryWithSortKey(t *testing.T) {
+
+	tableName := "dynamo.test"
+
+	_, err := New(DbOptions{
+		TableName:        tableName,
+		ValueStoreMode:   ValueStoreModeAttributes,
+		SortKeyAttribute: "group_id",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to initialize table: %v", err)
+	}
+
+	//Add 3 items in a loop with different sort keys
+	// Insert multiple Person objects
+	testPersons := []struct {
+		pk   string
+		sk   string
+		data Person
+	}{
+		{"company1", "emp001", Person{Name: "John Doe", Email: "john@company.com"}},
+		{"company1", "emp002", Person{Name: "Jane Smith", Email: "jane@company.com"}},
+		{"company1", "emp003", Person{Name: "Bob Johnson", Email: "bob@company.com"}},
+		{"company1", "con001", Person{Name: "Mike Dowell", Email: "mike@company.com"}},
+	}
+
+	for _, item := range testPersons {
+		err = Put(tableName, item.pk, item.data, SetOptions{
+			SortKey: item.sk,
+			Ttl:     1 * time.Minute,
+		})
+		if err != nil {
+			t.Fatalf("Failed to put person %s/%s: %v", item.pk, item.sk, err)
+		}
+	}
+
+	results, err := Query[Person](tableName, "company1", QueryOptions{
+		SortKey:          "emp",
+		SortKeyCondition: QueryConditionBeginsWith,
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to query: %v", err)
+	}
+
+	if len(results) != 3 {
+		t.Fatalf("Expected 3 items, got %d", len(results))
+	}
+
+	fmt.Println("Test passed")
+}
+
+func TestGenericGetInt(t *testing.T) {
+
+	tableName := "dynamo.test"
+
+	_, err := New(DbOptions{
+		TableName:        tableName,
+		SortKeyAttribute: "group_id",
+		Ttl:              1 * time.Minute,
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to initialize table: %v", err)
+	}
+
+	Put(tableName, "test_generic_int", 123)
+
+	value, err := GetInt(tableName, "test_generic_int")
+
+	if err != nil {
+		t.Fatalf("Failed to get value: %v", err)
+	}
+
+	expected := 123
+
+	if value != expected {
+		t.Fatalf("Expected %v, got %v", expected, value)
+	}
+
+	fmt.Println("Test passed")
+}
+
 func TestGenericDelete(t *testing.T) {
 
 	_, err := New(DbOptions{
