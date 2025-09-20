@@ -16,8 +16,27 @@ import (
 	"github.com/finch-technologies/go-utils/utils"
 )
 
+// tableMap stores DynamoDB table instances by table name for reuse across the application
 var tableMap map[string]*DynamoDB = make(map[string]*DynamoDB)
 
+// New creates a new DynamoDB instance with the provided configuration options.
+// It initializes the AWS DynamoDB client and stores the instance in the global tableMap for reuse.
+//
+// Parameters:
+//   - options: Variable number of DbOptions to configure the DynamoDB instance
+//
+// Returns:
+//   - *DynamoDB: Configured DynamoDB instance
+//   - error: Error if table name is missing or client creation fails
+//
+// Example:
+//
+//	db, err := New(DbOptions{
+//	    TableName:        "my-table",
+//	    Region:           "us-east-1",
+//	    ValueStoreMode:   ValueStoreModeAttributes,
+//	    SortKeyAttribute: "sk",
+//	})
 func New(options ...DbOptions) (*DynamoDB, error) {
 
 	opts := getOptions(options...)
@@ -30,6 +49,12 @@ func New(options ...DbOptions) (*DynamoDB, error) {
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dynamodb client: %w", err)
+	}
+
+	err = ensureTableExists(context.Background(), client, opts.TableName)
+
+	if err != nil {
+		return nil, err
 	}
 
 	d := &DynamoDB{
@@ -48,6 +73,34 @@ func New(options ...DbOptions) (*DynamoDB, error) {
 	return d, nil
 }
 
+// Get retrieves a single item from DynamoDB using the partition key and optional sort key.
+// The function supports TTL (Time To Live) checking and returns nil for expired items.
+// It supports both JSON and attribute value store modes.
+//
+// Parameters:
+//   - key: The partition key value to retrieve
+//   - options: Optional GetOptions containing sort key and result type information
+//
+// Returns:
+//   - interface{}: The retrieved item (type depends on value store mode)
+//   - error: Error if retrieval fails
+//
+// Behavior:
+//   - Returns nil if item doesn't exist
+//   - Returns empty string (JSON mode) or nil (attribute mode) for expired items
+//   - JSON mode: Returns the value from the configured value attribute
+//   - Attribute mode: Returns the entire item unmarshaled into the provided result type
+//
+// Example:
+//
+//	// Simple get
+//	item, err := db.Get("user123")
+//
+//	// Get with sort key and typed result
+//	result, err := db.Get("user123", GetOptions{
+//	    SortKey: "profile",
+//	    Result:  &Person{},
+//	})
 func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
 
 	opts := getGetOptions(options...)
@@ -108,6 +161,46 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
 	}
 }
 
+// Query retrieves multiple items from DynamoDB using the partition key and optional sort key conditions.
+// It performs efficient queries using DynamoDB's Query operation (not Scan) and supports various
+// sort key conditions like begins_with, equals, greater_than, etc.
+//
+// Parameters:
+//   - key: The partition key value to query
+//   - options: Optional QueryOptions containing sort key conditions and result type information
+//
+// Returns:
+//   - []interface{}: Slice of retrieved items (type depends on value store mode)
+//   - error: Error if query fails
+//
+// Features:
+//   - Automatic TTL filtering (expired items are excluded)
+//   - Support for multiple sort key conditions (begins_with, equals, comparisons)
+//   - Both JSON and attribute value store modes supported
+//   - Efficient DynamoDB Query operation (not table scan)
+//   - Configurable result limits
+//
+// Sort Key Conditions:
+//   - QueryConditionEquals: Exact match
+//   - QueryConditionBeginsWith: Prefix match
+//   - QueryConditionGreaterThan/LessThan: Comparison operators
+//   - QueryConditionGreaterThanOrEqualTo/LessThanOrEqualTo: Inclusive comparisons
+//
+// Example:
+//
+//	// Query all items for a partition key
+//	items, err := db.Query("user123")
+//
+//	// Query with sort key condition
+//	sessions, err := db.Query("user123", QueryOptions{
+//	    SortKeyCondition: QueryConditionBeginsWith,
+//	    SortKey:          "session_",
+//	})
+//
+//	// Query with typed result for attribute mode
+//	people, err := db.Query("company1", QueryOptions{
+//	    Result: &Person{},
+//	})
 func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]interface{}, error) {
 	opts := getQueryOptions(options...)
 	now := time.Now().Unix()
@@ -211,6 +304,52 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]interface{}, er
 	return items, nil
 }
 
+// Update performs partial updates to existing DynamoDB items using the efficient UpdateItem operation.
+// It only updates the fields provided in the value parameter, leaving other fields unchanged.
+// The function uses DynamoDB's UpdateExpression with SET operations for optimal performance.
+//
+// Parameters:
+//   - key: The partition key of the item to update
+//   - value: Struct containing the fields to update (uses dynamodbav tags for field mapping)
+//   - options: Optional SetOptions containing sort key and TTL information
+//
+// Returns:
+//   - error: Error if update fails
+//
+// Features:
+//   - Partial updates: Only modifies specified fields
+//   - Automatic key protection: Partition/sort keys cannot be updated
+//   - TTL support: Can set/update expiration times
+//   - Type safety: Uses struct tags for field mapping
+//   - Efficient: Uses DynamoDB's native UpdateItem operation
+//   - Upsert behavior: Creates item if it doesn't exist (DynamoDB default behavior)
+//
+// Field Mapping:
+//
+//	The function uses Go struct tags to map fields to DynamoDB attributes:
+//	- `dynamodbav:"field_name"` - Maps struct field to DynamoDB attribute
+//	- Fields without tags use the struct field name
+//	- Partition/sort key fields are automatically skipped
+//
+// Example:
+//
+//	// Partial update - only email field
+//	update := struct {
+//	    Email string `dynamodbav:"email"`
+//	}{
+//	    Email: "new@email.com",
+//	}
+//	err := db.Update("user123", update, SetOptions{SortKey: "profile"})
+//
+//	// Multiple field update with TTL
+//	person := Person{
+//	    Name:  "New Name",
+//	    Email: "new@email.com",
+//	}
+//	err := db.Update("user123", person, SetOptions{
+//	    SortKey: "profile",
+//	    Ttl:     1 * time.Hour,
+//	})
 func (d *DynamoDB) Update(key string, value any, options ...SetOptions) error {
 	opts := getSetOptions(options...)
 
@@ -296,6 +435,57 @@ func (d *DynamoDB) Update(key string, value any, options ...SetOptions) error {
 	return nil
 }
 
+// Put stores a complete item in DynamoDB, replacing any existing item with the same key.
+// It supports both JSON and attribute value store modes and automatically handles type conversion.
+// The function uses DynamoDB's PutItem operation which performs a complete item replacement.
+//
+// Parameters:
+//   - key: The partition key value for the item
+//   - value: The data to store (can be any serializable type)
+//   - options: Optional SetOptions containing sort key and TTL information
+//
+// Returns:
+//   - error: Error if storage fails
+//
+// Storage Modes:
+//   - JSON Mode: Serializes value to JSON and stores in the configured value attribute
+//   - Attribute Mode: Maps struct fields directly to DynamoDB attributes using dynamodbav tags
+//
+// Type Support (JSON Mode):
+//   - Structs, pointers, interfaces, maps, slices, arrays: JSON serialized
+//   - Strings: Stored directly
+//   - Integers: Converted to string representation
+//   - Floats: Converted to string representation
+//   - Booleans: Converted to string representation
+//
+// Features:
+//   - Complete item replacement (unlike Update which does partial updates)
+//   - Automatic type conversion based on reflection
+//   - TTL support for automatic item expiration
+//   - Sort key support for composite primary keys
+//   - Handles both simple and complex data types
+//
+// Example:
+//
+//	// Store a struct (attribute mode)
+//	person := Person{Name: "John", Email: "john@example.com"}
+//	err := db.Put("user123", person, SetOptions{
+//	    SortKey: "profile",
+//	    Ttl:     24 * time.Hour,
+//	})
+//
+//	// Store simple string (JSON mode)
+//	err := db.Put("cache_key", "cached_value")
+//
+//	// Store complex data with expiration
+//	data := map[string]interface{}{
+//	    "settings": map[string]string{"theme": "dark"},
+//	    "lastLogin": time.Now(),
+//	}
+//	err := db.Put("user123", data, SetOptions{
+//	    SortKey: "settings",
+//	    Ttl:     7 * 24 * time.Hour,
+//	})
 func (d *DynamoDB) Put(key string, value any, options ...SetOptions) error {
 
 	opts := getSetOptions(options...)
@@ -364,6 +554,21 @@ func (d *DynamoDB) Put(key string, value any, options ...SetOptions) error {
 	return nil
 }
 
+// Delete removes an item from the DynamoDB table by its partition key and optional sort key.
+// It uses the DeleteItem operation to permanently remove the item from the table.
+//
+// Parameters:
+//   - key: The partition key value that uniquely identifies the item (or combined with sort key)
+//   - sortKey: Optional variadic parameter for the sort key value. If the table has a sort key
+//     attribute configured, the first sortKey value will be used. If no sortKey is provided
+//     but the table requires one, "null" will be used as the default value.
+//
+// Returns:
+//   - error: Returns an error if the delete operation fails due to network issues,
+//     permission problems, or other DynamoDB service errors. Returns nil on success.
+//
+// Note: This operation will succeed even if the item doesn't exist (DynamoDB doesn't
+// return an error for deleting non-existent items).
 func (d *DynamoDB) Delete(key string, sortKey ...string) error {
 
 	sk := "null"
@@ -392,6 +597,24 @@ func (d *DynamoDB) Delete(key string, sortKey ...string) error {
 	return nil
 }
 
+// Get is a generic utility function that retrieves an item from a DynamoDB table and returns it
+// as a strongly-typed pointer. This function provides a convenient wrapper around the DynamoDB
+// Get operation with automatic type conversion.
+//
+// Type Parameter:
+//   - T: The type to unmarshal the retrieved item into. Must be compatible with the stored data format.
+//
+// Parameters:
+//   - tableName: Name of the DynamoDB table to retrieve from
+//   - key: The partition key value that uniquely identifies the item
+//   - sortKey: Optional variadic parameter for the sort key value when the table uses composite keys
+//
+// Returns:
+//   - *T: A pointer to the retrieved and unmarshaled item, or nil if the item doesn't exist
+//   - error: Returns an error if the retrieval fails, table doesn't exist, or unmarshaling fails
+//
+// The function automatically handles different storage modes (JSON vs native DynamoDB types)
+// and returns nil without error if the requested item doesn't exist in the table.
 func Get[T any](tableName string, key string, sortKey ...string) (*T, error) {
 
 	var value T
@@ -440,6 +663,24 @@ func Get[T any](tableName string, key string, sortKey ...string) (*T, error) {
 	return &value, err
 }
 
+// Query is a generic utility function that performs a DynamoDB Query operation and returns
+// a slice of strongly-typed items. This function provides a convenient wrapper around the
+// DynamoDB Query operation with automatic type conversion for multiple results.
+//
+// Type Parameter:
+//   - T: The type to unmarshal each retrieved item into. Must be compatible with the stored data format.
+//
+// Parameters:
+//   - tableName: Name of the DynamoDB table to query
+//   - key: The partition key value to query for
+//   - options: Optional QueryOptions to specify sort key conditions, filters, limits, etc.
+//
+// Returns:
+//   - []T: A slice of retrieved and unmarshaled items matching the query criteria
+//   - error: Returns an error if the query fails, table doesn't exist, or unmarshaling fails
+//
+// The function automatically handles type conversion and returns an empty slice if no items
+// match the query criteria.
 func Query[T any](tableName string, key string, options ...QueryOptions) ([]T, error) {
 	table, err := getTable(tableName)
 
@@ -468,6 +709,17 @@ func Query[T any](tableName string, key string, options ...QueryOptions) ([]T, e
 	return result, nil
 }
 
+// GetString is a utility function that retrieves a string value from a DynamoDB table.
+// This is a convenience function for cases where you know the stored value is a string
+// and want to avoid the overhead of generic type parameters.
+//
+// Parameters:
+//   - tableName: Name of the DynamoDB table to retrieve from
+//   - key: The partition key value that uniquely identifies the item
+//
+// Returns:
+//   - string: The string value stored in the table, or empty string if not found
+//   - error: Returns an error if the retrieval fails or the value cannot be converted to string
 func GetString(tableName, key string) (string, error) {
 	table, err := getTable(tableName)
 
@@ -484,6 +736,17 @@ func GetString(tableName, key string) (string, error) {
 	return value.(string), nil
 }
 
+// GetInt is a utility function that retrieves an integer value from a DynamoDB table.
+// This function expects the stored value to be a string representation of an integer
+// and automatically converts it using strconv.Atoi.
+//
+// Parameters:
+//   - tableName: Name of the DynamoDB table to retrieve from
+//   - key: The partition key value that uniquely identifies the item
+//
+// Returns:
+//   - int: The integer value converted from the stored string, or 0 if not found
+//   - error: Returns an error if retrieval fails or the value cannot be converted to integer
 func GetInt(tableName, key string) (int, error) {
 	table, err := getTable(tableName)
 
@@ -506,6 +769,20 @@ func GetInt(tableName, key string) (int, error) {
 	return value, nil
 }
 
+// Put is a utility function that stores an item in a DynamoDB table using the specified key.
+// This function provides a convenient wrapper around the DynamoDB Put operation for
+// simple key-value storage scenarios.
+//
+// Parameters:
+//   - tableName: Name of the DynamoDB table to store the item in
+//   - key: The partition key value that will uniquely identify the stored item
+//   - value: The data to store - can be any type that can be marshaled to DynamoDB format
+//   - options: Optional SetOptions to configure TTL, sort keys, or other storage settings
+//
+// Returns:
+//   - error: Returns an error if the table doesn't exist or the put operation fails
+//
+// This function automatically handles the table lookup and delegates to the table's Put method.
 func Put(tableName, key string, value any, options ...SetOptions) error {
 	table, err := getTable(tableName)
 
@@ -518,6 +795,21 @@ func Put(tableName, key string, value any, options ...SetOptions) error {
 	return nil
 }
 
+// Delete is a utility function that removes an item from a DynamoDB table by its key.
+// This function provides a convenient wrapper around the DynamoDB Delete operation
+// for simple deletion scenarios.
+//
+// Parameters:
+//   - tableName: Name of the DynamoDB table to delete the item from
+//   - key: The partition key value that uniquely identifies the item to delete
+//   - sortKey: Optional variadic parameter for the sort key value when the table uses composite keys
+//
+// Returns:
+//   - error: Returns an error if the table doesn't exist or the delete operation fails
+//
+// This function will succeed even if the item doesn't exist (DynamoDB doesn't return an error
+// for deleting non-existent items). It automatically handles the table lookup and delegates
+// to the table's Delete method.
 func Delete(tableName, key string, sortKey ...string) error {
 	table, err := getTable(tableName)
 
