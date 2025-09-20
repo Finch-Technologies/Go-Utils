@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/finch-technologies/go-utils/adapters"
 	"github.com/finch-technologies/go-utils/log"
 
 	"github.com/redis/go-redis/v9"
@@ -32,7 +31,7 @@ func New(options ...DbOptions) (*RedisDB, error) {
 	opts := getOptions(options...)
 
 	return &RedisDB{
-		rdb: adapters.GetRedisClient(opts.Db),
+		rdb: GetRedisClient(opts.Db),
 	}, nil
 }
 

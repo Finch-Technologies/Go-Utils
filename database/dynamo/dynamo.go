@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/finch-technologies/go-utils/adapters"
 	"github.com/finch-technologies/go-utils/log"
 	"github.com/finch-technologies/go-utils/utils"
 )
@@ -27,7 +26,7 @@ func New(options ...DbOptions) (*DynamoDB, error) {
 		return nil, fmt.Errorf("table name is required")
 	}
 
-	client, err := adapters.GetDynamoClient(opts.Region)
+	client, err := GetDynamoClient(opts.Region)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dynamodb client: %w", err)

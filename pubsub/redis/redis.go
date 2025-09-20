@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/finch-technologies/go-utils/adapters"
+	database "github.com/finch-technologies/go-utils/database/redis"
 	"github.com/finch-technologies/go-utils/log"
-
 	"github.com/redis/go-redis/v9"
 )
 
@@ -16,7 +15,7 @@ type RedisMessageBroker struct {
 
 func New(db int) *RedisMessageBroker {
 	return &RedisMessageBroker{
-		rdb: adapters.GetRedisClient(db),
+		rdb: database.GetRedisClient(db),
 	}
 }
 
