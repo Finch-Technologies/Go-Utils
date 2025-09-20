@@ -420,6 +420,10 @@ func Get[T any](tableName string, key string, sortKey ...string) (*T, error) {
 
 	if table.valueStoreMode == ValueStoreModeJson {
 
+		if valueInterface == nil {
+			return nil, nil
+		}
+
 		valueStr := valueInterface.(string)
 
 		if valueStr == "" {

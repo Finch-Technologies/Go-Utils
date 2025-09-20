@@ -172,10 +172,10 @@ func TestGenericQueryWithSortKey(t *testing.T) {
 		sk   string
 		data Person
 	}{
-		{"company1", "emp001", Person{Name: "John Doe", Email: "john@company.com"}},
-		{"company1", "emp002", Person{Name: "Jane Smith", Email: "jane@company.com"}},
-		{"company1", "emp003", Person{Name: "Bob Johnson", Email: "bob@company.com"}},
-		{"company1", "con001", Person{Name: "Mike Dowell", Email: "mike@company.com"}},
+		{"org1", "emp001", Person{Name: "John Doe", Email: "john@company.com"}},
+		{"org1", "emp002", Person{Name: "Jane Smith", Email: "jane@company.com"}},
+		{"org1", "emp003", Person{Name: "Bob Johnson", Email: "bob@company.com"}},
+		{"org1", "con001", Person{Name: "Mike Dowell", Email: "mike@company.com"}},
 	}
 
 	for _, item := range testPersons {
@@ -188,7 +188,7 @@ func TestGenericQueryWithSortKey(t *testing.T) {
 		}
 	}
 
-	results, err := Query[Person](tableName, "company1", QueryOptions{
+	results, err := Query[Person](tableName, "org1", QueryOptions{
 		SortKey:          "emp",
 		SortKeyCondition: QueryConditionBeginsWith,
 	})
@@ -239,7 +239,6 @@ func TestGenericDelete(t *testing.T) {
 
 	_, err := New(DbOptions{
 		TableName:        "dynamo.test",
-		ValueStoreMode:   ValueStoreModeAttributes,
 		SortKeyAttribute: "group_id",
 	})
 
@@ -254,7 +253,7 @@ func TestGenericDelete(t *testing.T) {
 		Ttl: 1 * time.Minute,
 	})
 
-	utils.Sleep(context.Background(), 2*time.Second)
+	utils.Sleep(context.Background(), 1*time.Second)
 
 	err = Delete("dynamo.test", "test_generic_delete")
 
@@ -262,7 +261,9 @@ func TestGenericDelete(t *testing.T) {
 		t.Fatalf("Failed to delete value: %v", err)
 	}
 
-	value, err := Get[Person]("dynamo.test", "test_generic")
+	utils.Sleep(context.Background(), 1*time.Second)
+
+	value, err := Get[Person]("dynamo.test", "test_generic_delete")
 
 	if err != nil {
 		t.Fatalf("Failed to get value: %v", err)
