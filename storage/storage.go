@@ -25,9 +25,10 @@ const (
 )
 
 type StorageConfig struct {
-	Type   StorageType
-	Bucket string
-	Region string
+	Type      StorageType
+	Bucket    string
+	Region    string
+	KeyPrefix string
 }
 
 func getConfig(config ...StorageConfig) StorageConfig {
@@ -55,7 +56,11 @@ func Init(config ...StorageConfig) (*FileManager, error) {
 			return nil, fmt.Errorf("s3 bucket is required")
 		}
 		log.Debugf("Using S3 storage: %s", cfg.Bucket)
-		storage, err = s3.GetS3Storage(cfg.Bucket, cfg.Region)
+		storage, err = s3.New(s3.S3Config{
+			Bucket:    cfg.Bucket,
+			Region:    cfg.Region,
+			KeyPrefix: cfg.KeyPrefix,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create s3 storage: %s", err)
 		}
@@ -94,6 +99,6 @@ func (fm *FileManager) Upload(ctx context.Context, file []byte, key string, opti
 	return uploaded, err
 }
 
-func (fm *FileManager) Download(ctx context.Context, key, filePath string) error {
-	return fm.storage.Download(ctx, key, filePath)
+func (fm *FileManager) Download(ctx context.Context, key string) ([]byte, error) {
+	return fm.storage.Download(ctx, key)
 }

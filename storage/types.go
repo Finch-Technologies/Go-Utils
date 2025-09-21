@@ -8,5 +8,5 @@ import (
 
 type Storage interface {
 	Upload(ctx context.Context, file []byte, key string, options ...types.UploadOptions) (string, error)
-	Download(ctx context.Context, key, filePath string) error
+	Download(ctx context.Context, key string) ([]byte, error)
 }

@@ -44,34 +44,17 @@ func (s *LocalStorage) Upload(ctx context.Context, file []byte, dirAndFileName s
 	return "", nil
 }
 
-func (s *LocalStorage) Download(ctx context.Context, key, filePath string) error {
+func (s *LocalStorage) Download(ctx context.Context, key string) ([]byte, error) {
 	sourceFile, err := os.Open(s.BasePath + "/" + key)
 	if err != nil {
-		return fmt.Errorf("failed to open source file %q, %v", key, err)
+		return nil, fmt.Errorf("failed to open source file %q, %v", key, err)
 	}
 	defer func(sourceFile *os.File) {
 		err := sourceFile.Close()
 		if err != nil {
-			log.Error("failed to write file %q: %v", filePath, err)
+			log.Error("failed to write file %q: %v", key, err)
 		}
 	}(sourceFile)
 
-	destFile, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file %q, %v", filePath, err)
-	}
-	defer func(destFile *os.File) {
-		err := destFile.Close()
-		if err != nil {
-			log.Error("failed to write file %q: %v", filePath, err)
-		}
-	}(destFile)
-
-	_, err = io.Copy(destFile, sourceFile)
-	if err != nil {
-		//errors.ThrowError(err, "", "", nil)
-		return fmt.Errorf("failed to copy file %v", err)
-	}
-
-	return nil
+	return io.ReadAll(sourceFile)
 }
