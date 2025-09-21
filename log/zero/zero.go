@@ -112,9 +112,11 @@ func (z *ZeroLogger) Warning(v ...any) {
 	z.logger.Warn().Msg(fmt.Sprint(v...))
 }
 
+func (z *ZeroLogger) Warningf(s string, v ...any) {
+	z.logger.Warn().Msg(fmt.Sprintf(s, v...))
+}
+
 func (z *ZeroLogger) Error(v ...any) {
-	//TODO: Implement sentry
-	//sentry.CaptureException(err)
 	z.logger.Error().Stack().Msg(fmt.Sprint(v...))
 }
 

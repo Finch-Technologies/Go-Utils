@@ -15,6 +15,7 @@ type LoggerInterface interface {
 	InfoFile(filePath string, data string)
 	ErrorFile(filePath string, data string)
 	Warning(v ...any)
+	Warningf(s string, v ...any)
 	Error(v ...any)
 	Errorf(s string, v ...any)
 	ErrorStack(stack, s string, v ...any)

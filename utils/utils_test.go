@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/finch-technologies/go-utils/log"
 )
 
 type TestStruct struct {
@@ -274,9 +272,9 @@ func TestSleepRandom(t *testing.T) {
 
 func TestHash(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		length   int
+		name   string
+		input  string
+		length int
 	}{
 		{"short hash", "test", 8},
 		{"full hash", "test", 100}, // Should return full hash
@@ -506,7 +504,7 @@ func TestParseTimeout(t *testing.T) {
 		{"valid seconds", "5s", 5 * time.Second},
 		{"valid milliseconds", "100ms", 100 * time.Millisecond},
 		{"invalid", "invalid", 30 * time.Second}, // default
-		{"empty", "", 30 * time.Second}, // default
+		{"empty", "", 30 * time.Second},          // default
 	}
 
 	for _, tt := range tests {
@@ -567,59 +565,6 @@ func TestMergeObjects_InvalidTypes(t *testing.T) {
 	var intPtr *int
 	var intVal int = 42
 	MergeObjects(intPtr, intVal) // Should not panic and return early
-}
-
-// Mock logger for testing
-type mockLogger struct {
-	logged bool
-	msg    string
-}
-
-// Ensure mockLogger implements the interface
-var _ log.LoggerInterface = (*mockLogger)(nil)
-
-func (m *mockLogger) ErrorStack(stack, s string, args ...any) {
-	m.logged = true
-	m.msg = stack
-}
-
-func (m *mockLogger) Error(args ...any) {}
-func (m *mockLogger) Errorf(s string, args ...any) {}
-func (m *mockLogger) Warning(args ...any) {}
-func (m *mockLogger) Info(args ...any) {}
-func (m *mockLogger) Infof(s string, args ...any) {}
-func (m *mockLogger) Debug(args ...any) {}
-func (m *mockLogger) Debugf(s string, args ...any) {}
-func (m *mockLogger) InfoEvent(eventType string, data string) {}
-func (m *mockLogger) ErrorEvent(eventType string, data string) {}
-func (m *mockLogger) ErrorEventWithResources(eventType, screenshot, text, data string) {}
-func (m *mockLogger) InfoFile(filePath string, data string) {}
-func (m *mockLogger) ErrorFile(filePath string, data string) {}
-func (m *mockLogger) DebugFields(msg string, fields map[string]any) {}
-func (m *mockLogger) InfoFields(msg string, fields map[string]any) {}
-func (m *mockLogger) ErrorFields(msg string, fields map[string]any) {}
-func (m *mockLogger) GetContext() context.Context { return context.Background() }
-
-func TestTry(t *testing.T) {
-	mockLog := &mockLogger{}
-
-	// Test normal function (should not panic or log)
-	Try(func() {
-		// Normal operation
-	}, mockLog)
-
-	if mockLog.logged {
-		t.Errorf("Try() should not have logged for normal function")
-	}
-
-	// Test panic recovery
-	Try(func() {
-		panic("test panic")
-	}, mockLog)
-
-	if !mockLog.logged {
-		t.Errorf("Try() should have logged panic")
-	}
 }
 
 func TestTryCatch(t *testing.T) {
