@@ -350,7 +350,7 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]interface{}, er
 //	    SortKey: "profile",
 //	    Ttl:     1 * time.Hour,
 //	})
-func (d *DynamoDB) Update(key string, value any, options ...SetOptions) error {
+func (d *DynamoDB) Update(key string, value any, options ...PutOptions) error {
 	opts := getSetOptions(options...)
 
 	// Build key for the item to update
@@ -486,7 +486,7 @@ func (d *DynamoDB) Update(key string, value any, options ...SetOptions) error {
 //	    SortKey: "settings",
 //	    Ttl:     7 * 24 * time.Hour,
 //	})
-func (d *DynamoDB) Put(key string, value any, options ...SetOptions) error {
+func (d *DynamoDB) Put(key string, value any, options ...PutOptions) error {
 
 	opts := getSetOptions(options...)
 
@@ -783,7 +783,7 @@ func GetInt(tableName, key string) (int, error) {
 //   - error: Returns an error if the table doesn't exist or the put operation fails
 //
 // This function automatically handles the table lookup and delegates to the table's Put method.
-func Put(tableName, key string, value any, options ...SetOptions) error {
+func Put(tableName, key string, value any, options ...PutOptions) error {
 	table, err := getTable(tableName)
 
 	if err != nil {

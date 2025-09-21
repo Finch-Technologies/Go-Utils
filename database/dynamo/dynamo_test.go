@@ -30,7 +30,7 @@ func TestGenericAttributes(t *testing.T) {
 	Put("dynamo.test", "test_generic", Person{
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
-	}, SetOptions{
+	}, PutOptions{
 		Ttl: 1 * time.Minute,
 	})
 
@@ -69,7 +69,7 @@ func TestGenericJson(t *testing.T) {
 	Put("dynamo.test", "test_generic", Person{
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
-	}, SetOptions{
+	}, PutOptions{
 		Ttl: 1 * time.Minute,
 	})
 
@@ -134,7 +134,7 @@ func TestGenericQuery(t *testing.T) {
 	Put("dynamo.test", "test_generic_query", Person{
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
-	}, SetOptions{
+	}, PutOptions{
 		Ttl: 1 * time.Minute,
 	})
 
@@ -179,7 +179,7 @@ func TestGenericQueryWithSortKey(t *testing.T) {
 	}
 
 	for _, item := range testPersons {
-		err = Put(tableName, item.pk, item.data, SetOptions{
+		err = Put(tableName, item.pk, item.data, PutOptions{
 			SortKey: item.sk,
 			Ttl:     1 * time.Minute,
 		})
@@ -249,7 +249,7 @@ func TestGenericDelete(t *testing.T) {
 	Put("dynamo.test", "test_generic_delete", Person{
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
-	}, SetOptions{
+	}, PutOptions{
 		Ttl: 1 * time.Minute,
 	})
 
@@ -288,7 +288,7 @@ func TestGetString(t *testing.T) {
 		t.Fatalf("Failed to create table: %v", err)
 	}
 
-	err = table.Put("test_string", "test", SetOptions{
+	err = table.Put("test_string", "test", PutOptions{
 		Ttl: 1 * time.Minute,
 	})
 
@@ -328,7 +328,7 @@ func TestGetJson(t *testing.T) {
 		Email: "john.doe@example.com",
 	}
 
-	err = table.Put("test_json", s, SetOptions{
+	err = table.Put("test_json", s, PutOptions{
 		Ttl: 1 * time.Minute,
 	})
 
@@ -368,7 +368,7 @@ func TestGetAttributes(t *testing.T) {
 		Email: "john.doe@example.com",
 	}
 
-	err = table.Put("test_attributes", expected, SetOptions{
+	err = table.Put("test_attributes", expected, PutOptions{
 		Ttl: 1 * time.Minute,
 	})
 
@@ -408,7 +408,7 @@ func TestGetJsonWithExpiry(t *testing.T) {
 	err = table.Put("test_json_with_expiry", Person{
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
-	}, SetOptions{
+	}, PutOptions{
 		Ttl: 5 * time.Second,
 	})
 
@@ -457,7 +457,7 @@ func TestQueryBasic(t *testing.T) {
 	}
 
 	for _, item := range testItems {
-		err = table.Put(item.pk, item.data, SetOptions{
+		err = table.Put(item.pk, item.data, PutOptions{
 			SortKey: item.sk,
 			Ttl:     1 * time.Minute,
 		})
@@ -504,7 +504,7 @@ func TestQueryWithSortKeyConditions(t *testing.T) {
 	}
 
 	for _, item := range testItems {
-		err = table.Put(item.pk, item.data, SetOptions{
+		err = table.Put(item.pk, item.data, PutOptions{
 			SortKey: item.sk,
 			Ttl:     1 * time.Minute,
 		})
@@ -580,7 +580,7 @@ func TestQueryWithAttributes(t *testing.T) {
 	}
 
 	for _, item := range testPersons {
-		err = table.Put(item.pk, item.data, SetOptions{
+		err = table.Put(item.pk, item.data, PutOptions{
 			SortKey: item.sk,
 			Ttl:     1 * time.Minute,
 		})
@@ -626,7 +626,7 @@ func TestQueryWithExpiredItems(t *testing.T) {
 	}
 
 	// Insert items with short expiration
-	err = table.Put("user789", "valid_data", SetOptions{
+	err = table.Put("user789", "valid_data", PutOptions{
 		SortKey: "valid",
 		Ttl:     1 * time.Minute, // Valid for a minute
 	})
@@ -634,7 +634,7 @@ func TestQueryWithExpiredItems(t *testing.T) {
 		t.Fatalf("Failed to put valid item: %v", err)
 	}
 
-	err = table.Put("user789", "expired_data", SetOptions{
+	err = table.Put("user789", "expired_data", PutOptions{
 		SortKey: "expired",
 		Ttl:     1 * time.Second, // Will expire soon
 	})
@@ -709,7 +709,7 @@ func TestUpdateAttributes(t *testing.T) {
 		Email: "john@example.com",
 	}
 
-	err = table.Put("update_test", original, SetOptions{
+	err = table.Put("update_test", original, PutOptions{
 		SortKey: "person1",
 		Ttl:     1 * time.Minute,
 	})
@@ -724,7 +724,7 @@ func TestUpdateAttributes(t *testing.T) {
 		Email: "john.doe@newcompany.com",
 	}
 
-	err = table.Update("update_test", update, SetOptions{
+	err = table.Update("update_test", update, PutOptions{
 		SortKey: "person1",
 	})
 	if err != nil {
@@ -771,7 +771,7 @@ func TestUpdateWithTTL(t *testing.T) {
 		Email: "jane@example.com",
 	}
 
-	err = table.Put("ttl_update_test", initial, SetOptions{
+	err = table.Put("ttl_update_test", initial, PutOptions{
 		SortKey: "person2",
 		Ttl:     5 * time.Minute,
 	})
@@ -786,7 +786,7 @@ func TestUpdateWithTTL(t *testing.T) {
 		Name: "Jane Johnson",
 	}
 
-	err = table.Update("ttl_update_test", update, SetOptions{
+	err = table.Update("ttl_update_test", update, PutOptions{
 		SortKey: "person2",
 		Ttl:     10 * time.Second, // Short expiration for testing
 	})
@@ -828,7 +828,7 @@ func TestUpdateMultipleFields(t *testing.T) {
 		Email: "bob@example.com",
 	}
 
-	err = table.Put("multi_update_test", initial, SetOptions{
+	err = table.Put("multi_update_test", initial, PutOptions{
 		SortKey: "person3",
 		Ttl:     1 * time.Minute,
 	})
@@ -842,7 +842,7 @@ func TestUpdateMultipleFields(t *testing.T) {
 		Email: "robert.wilson@newcompany.com",
 	}
 
-	err = table.Update("multi_update_test", update, SetOptions{
+	err = table.Update("multi_update_test", update, PutOptions{
 		SortKey: "person3",
 	})
 	if err != nil {
@@ -888,7 +888,7 @@ func TestUpdateNonExistentItem(t *testing.T) {
 		Email: "nonexistent@example.com",
 	}
 
-	err = table.Update("non_existent_key", update, SetOptions{
+	err = table.Update("non_existent_key", update, PutOptions{
 		SortKey: "missing",
 	})
 

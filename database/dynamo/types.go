@@ -47,8 +47,8 @@ type GetOptions struct {
 	Result  any    // Pointer to struct where the result will be unmarshaled
 }
 
-// SetOptions contains options for DynamoDB Put and Update operations
-type SetOptions struct {
+// PutOptions contains options for DynamoDB Put and Update operations
+type PutOptions struct {
 	Ttl     time.Duration // TTL for the item (overrides default table TTL)
 	SortKey string        // Sort key value for tables with composite keys
 }

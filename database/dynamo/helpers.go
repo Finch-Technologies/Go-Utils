@@ -136,11 +136,11 @@ func getQueryOptions(options ...QueryOptions) QueryOptions {
 //
 // Returns:
 //   - SetOptions: The provided SetOptions or an empty SetOptions struct
-func getSetOptions(options ...SetOptions) SetOptions {
+func getSetOptions(options ...PutOptions) PutOptions {
 	if len(options) > 0 {
 		return options[0]
 	}
-	return SetOptions{}
+	return PutOptions{}
 }
 
 // ensureTableExists creates the DynamoDB table if it doesn't exist
