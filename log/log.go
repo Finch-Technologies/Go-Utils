@@ -46,6 +46,10 @@ func Warning(v ...any) {
 	logger.Warning(v...)
 }
 
+func Warningf(s string, v ...any) {
+	logger.Warningf(s, v...)
+}
+
 func Error(v ...any) {
 	logger.Error(v...)
 }
