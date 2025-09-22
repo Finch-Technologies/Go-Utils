@@ -286,6 +286,13 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]DynamoResult[an
 			continue // Skip expired items
 		}
 
+		expiryTime := time.Unix(expirationTime, 0)
+
+		sortKey := ""
+		if d.sortKeyAttribute != "" {
+			sortKey = item[d.sortKeyAttribute].(*types.AttributeValueMemberS).Value
+		}
+
 		if d.valueStoreMode == ValueStoreModeJson {
 			// Handle JSON value store mode
 			var resultItem map[string]interface{}
@@ -295,14 +302,12 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]DynamoResult[an
 				continue
 			}
 
-			expiryTime := time.Unix(expirationTime, 0)
-
 			value := resultItem[d.valueAttribute]
 
 			items = append(items, DynamoResult[any]{
 				Value:   value,
 				Expiry:  &expiryTime,
-				SortKey: opts.SortKey,
+				SortKey: sortKey,
 			})
 		} else {
 			// Handle attribute value store mode
@@ -325,12 +330,10 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]DynamoResult[an
 				continue
 			}
 
-			expiryTime := time.Unix(expirationTime, 0)
-
 			items = append(items, DynamoResult[any]{
 				Value:   resultItem,
 				Expiry:  &expiryTime,
-				SortKey: opts.SortKey,
+				SortKey: sortKey,
 			})
 		}
 	}
@@ -532,7 +535,9 @@ func (d *DynamoDB) Put(key string, value any, options ...PutOptions) error {
 		item[d.sortKeyAttribute] = &types.AttributeValueMemberS{Value: utils.StringOrDefault(opts.SortKey, "null")}
 	}
 
-	if d.valueStoreMode == ValueStoreModeJson {
+	if value == nil {
+		item[d.valueAttribute] = &types.AttributeValueMemberS{Value: ""}
+	} else if d.valueStoreMode == ValueStoreModeJson {
 		var payload string
 
 		t := reflect.TypeOf(value).Kind()
@@ -755,7 +760,7 @@ func Query[T any](tableName string, key string, options ...QueryOptions) ([]Dyna
 		result = append(result, DynamoResult[T]{
 			Value:   *resultValue,
 			Expiry:  item.Expiry,
-			SortKey: opts.SortKey,
+			SortKey: item.SortKey,
 		})
 	}
 
