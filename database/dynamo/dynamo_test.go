@@ -302,15 +302,15 @@ func TestGetString(t *testing.T) {
 		t.Fatalf("Failed to set value: %v", err)
 	}
 
-	result, err := table.Get("test_string")
+	result, expiry, err := table.Get("test_string")
 
 	if err != nil {
 		t.Fatalf("Failed to get value: %v", err)
 	}
 
-	value := result.Value
+	value := result.(string)
 
-	fmt.Println("Returned value: ", value, result.Expiry)
+	fmt.Println("Returned value: ", value, expiry)
 
 	expected := "test"
 
@@ -344,15 +344,15 @@ func TestGetJson(t *testing.T) {
 		t.Fatalf("Failed to set value: %v", err)
 	}
 
-	result, err := table.Get("test_json")
+	result, expiry, err := table.Get("test_json")
 
 	if err != nil {
 		t.Fatalf("Failed to get value: %v", err)
 	}
 
-	value := result.Value
+	value := result.(string)
 
-	fmt.Println("Returned value: ", value, result.Expiry)
+	fmt.Println("Returned value: ", value, expiry)
 
 	expectedJson := `{"name":"John Doe","email":"john.doe@example.com"}`
 
@@ -386,7 +386,7 @@ func TestGetAttributes(t *testing.T) {
 		t.Fatalf("Failed to set value: %v", err)
 	}
 
-	result, err := table.Get("test_attributes", GetOptions{
+	result, expiry, err := table.Get("test_attributes", GetOptions{
 		Result: &Person{},
 	})
 
@@ -394,14 +394,12 @@ func TestGetAttributes(t *testing.T) {
 		t.Fatalf("Failed to get value: %v", err)
 	}
 
-	value := result.Value
+	person := result.(*Person)
 
-	fmt.Println("Returned value: ", value, result.Expiry)
-
-	person := value.(*Person)
+	fmt.Println("Returned value: ", person, expiry)
 
 	if person.Name != expected.Name || person.Email != expected.Email {
-		t.Fatalf("Expected %v, got %v", expected, value)
+		t.Fatalf("Expected %v, got %v", expected, person)
 	}
 }
 
@@ -430,15 +428,15 @@ func TestGetJsonWithExpiry(t *testing.T) {
 
 	time.Sleep(6 * time.Second)
 
-	result, err := table.Get("test_json_with_expiry")
+	result, expiry, err := table.Get("test_json_with_expiry")
 
 	if err != nil {
 		t.Fatalf("Failed to get value: %v", err)
 	}
 
-	value := result.Value
+	value := result.(string)
 
-	fmt.Println("Returned value: ", value, result.Expiry)
+	fmt.Println("Returned value: ", value, expiry)
 
 	expected := ""
 
@@ -746,7 +744,7 @@ func TestUpdateAttributes(t *testing.T) {
 	}
 
 	// Retrieve the updated item
-	result, err := table.Get("update_test", GetOptions{
+	result, expiry, err := table.Get("update_test", GetOptions{
 		SortKey: "person1",
 		Result:  &Person{},
 	})
@@ -754,9 +752,7 @@ func TestUpdateAttributes(t *testing.T) {
 		t.Fatalf("Failed to get updated person: %v", err)
 	}
 
-	value := result.Value
-
-	updatedPerson := value.(*Person)
+	updatedPerson := result.(*Person)
 
 	// Verify the email was updated but name remained the same
 	if updatedPerson.Email != "john.doe@newcompany.com" {
@@ -767,7 +763,7 @@ func TestUpdateAttributes(t *testing.T) {
 		t.Fatalf("Expected name 'John Doe' to remain unchanged, got %s", updatedPerson.Name)
 	}
 
-	fmt.Printf("Updated person: %+v, expirationTime: %v\n", updatedPerson, result.Expiry)
+	fmt.Printf("Updated person: %+v, expirationTime: %v\n", updatedPerson, expiry)
 }
 
 func TestUpdateWithTTL(t *testing.T) {
@@ -811,7 +807,7 @@ func TestUpdateWithTTL(t *testing.T) {
 	}
 
 	// Verify the update worked immediately
-	result, err := table.Get("ttl_update_test", GetOptions{
+	result, expiry, err := table.Get("ttl_update_test", GetOptions{
 		SortKey: "person2",
 		Result:  &Person{},
 	})
@@ -819,14 +815,13 @@ func TestUpdateWithTTL(t *testing.T) {
 		t.Fatalf("Failed to get updated item: %v", err)
 	}
 
-	value := result.Value
+	updatedPerson := result.(*Person)
 
-	updatedPerson := value.(*Person)
 	if updatedPerson.Name != "Jane Johnson" {
 		t.Fatalf("Expected name 'Jane Johnson', got %s", updatedPerson.Name)
 	}
 
-	fmt.Printf("Updated item with TTL: %+v, expirationTime: %v\n", updatedPerson, result.Expiry)
+	fmt.Printf("Updated item with TTL: %+v, expirationTime: %v\n", updatedPerson, expiry)
 }
 
 func TestUpdateMultipleFields(t *testing.T) {
@@ -868,7 +863,7 @@ func TestUpdateMultipleFields(t *testing.T) {
 	}
 
 	// Verify both fields were updated
-	result, err := table.Get("multi_update_test", GetOptions{
+	result, expiry, err := table.Get("multi_update_test", GetOptions{
 		SortKey: "person3",
 		Result:  &Person{},
 	})
@@ -876,9 +871,7 @@ func TestUpdateMultipleFields(t *testing.T) {
 		t.Fatalf("Failed to get updated item: %v", err)
 	}
 
-	value := result.Value
-
-	updatedPerson := value.(*Person)
+	updatedPerson := result.(*Person)
 
 	if updatedPerson.Name != "Robert Wilson Jr." {
 		t.Fatalf("Expected name 'Robert Wilson Jr.', got %s", updatedPerson.Name)
@@ -888,7 +881,7 @@ func TestUpdateMultipleFields(t *testing.T) {
 		t.Fatalf("Expected email 'robert.wilson@newcompany.com', got %s", updatedPerson.Email)
 	}
 
-	fmt.Printf("Updated multiple fields: %+v, expirationTime: %v\n", updatedPerson, result.Expiry)
+	fmt.Printf("Updated multiple fields: %+v, expirationTime: %v\n", updatedPerson, expiry)
 }
 
 func TestUpdateNonExistentItem(t *testing.T) {
@@ -919,7 +912,7 @@ func TestUpdateNonExistentItem(t *testing.T) {
 	}
 
 	// Verify the item was created
-	result, err := table.Get("non_existent_key", GetOptions{
+	result, expiry, err := table.Get("non_existent_key", GetOptions{
 		SortKey: "missing",
 		Result:  &Person{},
 	})
@@ -927,9 +920,7 @@ func TestUpdateNonExistentItem(t *testing.T) {
 		t.Fatalf("Failed to get created item: %v", err)
 	}
 
-	value := result.Value
-
-	createdPerson := value.(*Person)
+	createdPerson := result.(*Person)
 
 	if createdPerson.Name != "Non Existent" {
 		t.Fatalf("Expected name 'Non Existent', got %s", createdPerson.Name)
@@ -939,7 +930,7 @@ func TestUpdateNonExistentItem(t *testing.T) {
 		t.Fatalf("Expected email 'nonexistent@example.com', got %s", createdPerson.Email)
 	}
 
-	fmt.Printf("Created item via update: %+v, expirationTime: %v\n", createdPerson, result.Expiry)
+	fmt.Printf("Created item via update: %+v, expirationTime: %v\n", createdPerson, expiry)
 }
 
 // TestNilAndEmptyValues tests various scenarios where DynamoDB operations
@@ -958,35 +949,35 @@ func TestNilAndEmptyValues(t *testing.T) {
 
 	// Test 1: Get non-existent item should return nil
 	t.Run("GetNonExistentItem", func(t *testing.T) {
-		result, err := table.Get("non-existent-key")
+		result, expiry, err := table.Get("non-existent-key")
 		if err != nil {
 			t.Fatalf("Expected no error for non-existent item, got: %v", err)
 		}
 
-		if result.Value != nil {
-			t.Fatalf("Expected nil value for non-existent item, got: %v", result.Value)
+		if result != nil {
+			t.Fatalf("Expected nil value for non-existent item, got: %v", result)
 		}
 
-		if result.Expiry != nil {
-			t.Fatalf("Expected nil expiry for non-existent item, got: %v", result.Expiry)
-		}
-
-		if result.SortKey != "" {
-			t.Fatalf("Expected empty sort key for non-existent item, got: %s", result.SortKey)
+		if expiry != nil {
+			t.Fatalf("Expected nil expiry for non-existent item, got: %v", expiry)
 		}
 	})
 
 	// Test 2: Get non-existent item with sort key should return nil
 	t.Run("GetNonExistentItemWithSortKey", func(t *testing.T) {
-		result, err := table.Get("non-existent-key", GetOptions{
+		result, expiry, err := table.Get("non-existent-key", GetOptions{
 			SortKey: "non-existent-sort",
 		})
 		if err != nil {
 			t.Fatalf("Expected no error for non-existent item with sort key, got: %v", err)
 		}
 
-		if result.Value != nil {
-			t.Fatalf("Expected nil value for non-existent item with sort key, got: %v", result.Value)
+		if result != nil {
+			t.Fatalf("Expected nil value for non-existent item with sort key, got: %v", result)
+		}
+
+		if expiry != nil {
+			t.Fatalf("Expected nil expiry for non-existent item with sort key, got: %v", expiry)
 		}
 	})
 
@@ -1042,7 +1033,7 @@ func TestNilAndEmptyValues(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Get the expired item
-		result, err := table.Get("expired-key", GetOptions{
+		result, expiry, err := table.Get("expired-key", GetOptions{
 			SortKey: "expired-sort",
 		})
 		if err != nil {
@@ -1051,13 +1042,13 @@ func TestNilAndEmptyValues(t *testing.T) {
 
 		// In JSON mode, expired items should return empty string
 		// Note: TTL processing may not be immediate in test environments
-		if result.Value != "" {
-			t.Logf("Note: Expected empty string for expired item in JSON mode, got: %v", result.Value)
+		if result != "" {
+			t.Logf("Note: Expected empty string for expired item in JSON mode, got: %v", result)
 			t.Logf("This may be due to TTL not being processed immediately in test environment")
 		}
 
 		// Expiry should still be set
-		if result.Expiry == nil {
+		if expiry == nil {
 			t.Fatalf("Expected expiry time to be set for expired item")
 		}
 	})
@@ -1090,8 +1081,8 @@ func TestNilAndEmptyValues(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Get the expired item
-		result, err := attrTable.Get("expired-attr-key", GetOptions{
-			SortKey: "expired-attr-sort",
+		result, _, err := attrTable.Get("expired-attr-key", GetOptions{
+			SortKey: "expired-attr	-sort",
 			Result:  &Person{},
 		})
 		if err != nil {
@@ -1100,8 +1091,8 @@ func TestNilAndEmptyValues(t *testing.T) {
 
 		// In attribute mode, expired items should return nil or empty result
 		// Note: TTL handling may vary based on environment, so we log the result
-		if result.Value != nil {
-			t.Logf("Note: Expected nil for expired item in attribute mode, got: %v", result.Value)
+		if result != nil {
+			t.Logf("Note: Expected nil for expired item in attribute mode, got: %v", result)
 			t.Logf("This may be due to TTL not being processed immediately in test environment")
 		}
 	})
@@ -1176,15 +1167,19 @@ func TestNilAndEmptyValues(t *testing.T) {
 			t.Fatalf("Failed to put empty string: %v", err)
 		}
 
-		result, err := table.Get("empty-string-key", GetOptions{
+		result, expiry, err := table.Get("empty-string-key", GetOptions{
 			SortKey: "empty-sort",
 		})
 		if err != nil {
 			t.Fatalf("Failed to get empty string: %v", err)
 		}
 
-		if result.Value != "" {
-			t.Fatalf("Expected empty string, got: %v", result.Value)
+		if result != "" {
+			t.Fatalf("Expected empty string, got: %v", result)
+		}
+
+		if expiry != nil {
+			t.Fatalf("Expected nil expiry for empty string, got: %v", expiry)
 		}
 	})
 
@@ -1209,7 +1204,7 @@ func TestNilAndEmptyValues(t *testing.T) {
 		}
 
 		// Get the zero value struct
-		result, err := attrTable.Get("zero-struct-key", GetOptions{
+		result, _, err := attrTable.Get("zero-struct-key", GetOptions{
 			SortKey: "zero-sort",
 			Result:  &Person{},
 		})
@@ -1217,7 +1212,7 @@ func TestNilAndEmptyValues(t *testing.T) {
 			t.Fatalf("Failed to get zero value struct: %v", err)
 		}
 
-		retrievedPerson := result.Value.(*Person)
+		retrievedPerson := result.(*Person)
 		if retrievedPerson.Name != "" || retrievedPerson.Email != "" {
 			t.Fatalf("Expected zero value struct, got: %+v", retrievedPerson)
 		}
@@ -1508,7 +1503,7 @@ func TestEdgeCasesAndNilHandling(t *testing.T) {
 		}
 
 		// Retrieve the empty value
-		result, err := table.Get("nil-test-key", GetOptions{
+		result, _, err := table.Get("nil-test-key", GetOptions{
 			SortKey: "nil-sort",
 		})
 		if err != nil {
@@ -1516,10 +1511,10 @@ func TestEdgeCasesAndNilHandling(t *testing.T) {
 		}
 
 		// The empty value should be stored and retrieved properly
-		if result.Value == "" {
+		if result == "" {
 			t.Logf("Empty value correctly stored and retrieved")
 		} else {
-			t.Logf("Empty value stored as: %v (type: %T)", result.Value, result.Value)
+			t.Logf("Empty value stored as: %v (type: %T)", result, result)
 		}
 	})
 
@@ -1555,7 +1550,7 @@ func TestEdgeCasesAndNilHandling(t *testing.T) {
 		}
 
 		// Retrieve the struct
-		result, err := table.Get("nil-pointer-key", GetOptions{
+		result, _, err := table.Get("nil-pointer-key", GetOptions{
 			SortKey: "nil-pointer-sort",
 			Result:  &PersonWithPointer{},
 		})
@@ -1563,7 +1558,7 @@ func TestEdgeCasesAndNilHandling(t *testing.T) {
 			t.Fatalf("Failed to get struct with nil pointers: %v", err)
 		}
 
-		retrievedPerson := result.Value.(*PersonWithPointer)
+		retrievedPerson := result.(*PersonWithPointer)
 		if retrievedPerson.Name != "Test Person" {
 			t.Fatalf("Expected name 'Test Person', got: %s", retrievedPerson.Name)
 		}
@@ -1614,7 +1609,7 @@ func TestEdgeCasesAndNilHandling(t *testing.T) {
 		}
 
 		// Retrieve and verify the update
-		result, err := table.Get("update-nil-key", GetOptions{
+		result, _, err := table.Get("update-nil-key", GetOptions{
 			SortKey: "update-nil-sort",
 			Result:  &Person{},
 		})
@@ -1622,7 +1617,7 @@ func TestEdgeCasesAndNilHandling(t *testing.T) {
 			t.Fatalf("Failed to get updated item: %v", err)
 		}
 
-		updatedPerson := result.Value.(*Person)
+		updatedPerson := result.(*Person)
 		if updatedPerson.Name != "" {
 			t.Fatalf("Expected empty name, got: %s", updatedPerson.Name)
 		}
@@ -1686,15 +1681,15 @@ func TestEdgeCasesAndNilHandling(t *testing.T) {
 		}
 
 		// Retrieve with empty sort key
-		result, err := table.Get("empty-sort-test", GetOptions{
+		result, _, err := table.Get("empty-sort-test", GetOptions{
 			SortKey: "",
 		})
 		if err != nil {
 			t.Fatalf("Failed to get item with empty sort key: %v", err)
 		}
 
-		if result.Value != "test-data" {
-			t.Fatalf("Expected 'test-data', got: %v", result.Value)
+		if result != "test-data" {
+			t.Fatalf("Expected 'test-data', got: %v", result)
 		}
 	})
 }
