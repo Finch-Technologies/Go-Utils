@@ -302,13 +302,15 @@ func TestGetString(t *testing.T) {
 		t.Fatalf("Failed to set value: %v", err)
 	}
 
-	value, expirationTime, err := table.Get("test_string")
+	result, err := table.Get("test_string")
 
 	if err != nil {
 		t.Fatalf("Failed to get value: %v", err)
 	}
 
-	fmt.Println("Returned value: ", value, expirationTime)
+	value := result.Value
+
+	fmt.Println("Returned value: ", value, result.Expiry)
 
 	expected := "test"
 
@@ -342,13 +344,15 @@ func TestGetJson(t *testing.T) {
 		t.Fatalf("Failed to set value: %v", err)
 	}
 
-	value, expirationTime, err := table.Get("test_json")
+	result, err := table.Get("test_json")
 
 	if err != nil {
 		t.Fatalf("Failed to get value: %v", err)
 	}
 
-	fmt.Println("Returned value: ", value, expirationTime)
+	value := result.Value
+
+	fmt.Println("Returned value: ", value, result.Expiry)
 
 	expectedJson := `{"name":"John Doe","email":"john.doe@example.com"}`
 
@@ -382,7 +386,7 @@ func TestGetAttributes(t *testing.T) {
 		t.Fatalf("Failed to set value: %v", err)
 	}
 
-	value, expirationTime, err := table.Get("test_attributes", GetOptions{
+	result, err := table.Get("test_attributes", GetOptions{
 		Result: &Person{},
 	})
 
@@ -390,7 +394,9 @@ func TestGetAttributes(t *testing.T) {
 		t.Fatalf("Failed to get value: %v", err)
 	}
 
-	fmt.Println("Returned value: ", value, expirationTime)
+	value := result.Value
+
+	fmt.Println("Returned value: ", value, result.Expiry)
 
 	person := value.(*Person)
 
@@ -424,13 +430,15 @@ func TestGetJsonWithExpiry(t *testing.T) {
 
 	time.Sleep(6 * time.Second)
 
-	value, expirationTime, err := table.Get("test_json_with_expiry")
+	result, err := table.Get("test_json_with_expiry")
 
 	if err != nil {
 		t.Fatalf("Failed to get value: %v", err)
 	}
 
-	fmt.Println("Returned value: ", value, expirationTime)
+	value := result.Value
+
+	fmt.Println("Returned value: ", value, result.Expiry)
 
 	expected := ""
 
@@ -608,7 +616,7 @@ func TestQueryWithAttributes(t *testing.T) {
 	}
 
 	// Verify first result is a *Person
-	firstPerson, ok := results[0].(*Person)
+	firstPerson, ok := (results[0].Value).(*Person)
 	if !ok {
 		t.Fatalf("Expected *Person, got %T", results[0])
 	}
@@ -663,8 +671,8 @@ func TestQueryWithExpiredItems(t *testing.T) {
 	}
 
 	// Verify it's the valid data
-	if results[0] != "valid_data" {
-		t.Fatalf("Expected 'valid_data', got %s", results[0])
+	if (results[0].Value) != "valid_data" {
+		t.Fatalf("Expected 'valid_data', got %s", (results[0].Value))
 	}
 
 	fmt.Printf("Non-expired query results: %v\n", results)
@@ -738,7 +746,7 @@ func TestUpdateAttributes(t *testing.T) {
 	}
 
 	// Retrieve the updated item
-	result, expirationTime, err := table.Get("update_test", GetOptions{
+	result, err := table.Get("update_test", GetOptions{
 		SortKey: "person1",
 		Result:  &Person{},
 	})
@@ -746,7 +754,9 @@ func TestUpdateAttributes(t *testing.T) {
 		t.Fatalf("Failed to get updated person: %v", err)
 	}
 
-	updatedPerson := result.(*Person)
+	value := result.Value
+
+	updatedPerson := value.(*Person)
 
 	// Verify the email was updated but name remained the same
 	if updatedPerson.Email != "john.doe@newcompany.com" {
@@ -757,7 +767,7 @@ func TestUpdateAttributes(t *testing.T) {
 		t.Fatalf("Expected name 'John Doe' to remain unchanged, got %s", updatedPerson.Name)
 	}
 
-	fmt.Printf("Updated person: %+v, expirationTime: %v\n", updatedPerson, expirationTime)
+	fmt.Printf("Updated person: %+v, expirationTime: %v\n", updatedPerson, result.Expiry)
 }
 
 func TestUpdateWithTTL(t *testing.T) {
@@ -801,7 +811,7 @@ func TestUpdateWithTTL(t *testing.T) {
 	}
 
 	// Verify the update worked immediately
-	result, expirationTime, err := table.Get("ttl_update_test", GetOptions{
+	result, err := table.Get("ttl_update_test", GetOptions{
 		SortKey: "person2",
 		Result:  &Person{},
 	})
@@ -809,12 +819,14 @@ func TestUpdateWithTTL(t *testing.T) {
 		t.Fatalf("Failed to get updated item: %v", err)
 	}
 
-	updatedPerson := result.(*Person)
+	value := result.Value
+
+	updatedPerson := value.(*Person)
 	if updatedPerson.Name != "Jane Johnson" {
 		t.Fatalf("Expected name 'Jane Johnson', got %s", updatedPerson.Name)
 	}
 
-	fmt.Printf("Updated item with TTL: %+v, expirationTime: %v\n", updatedPerson, expirationTime)
+	fmt.Printf("Updated item with TTL: %+v, expirationTime: %v\n", updatedPerson, result.Expiry)
 }
 
 func TestUpdateMultipleFields(t *testing.T) {
@@ -856,7 +868,7 @@ func TestUpdateMultipleFields(t *testing.T) {
 	}
 
 	// Verify both fields were updated
-	result, expirationTime, err := table.Get("multi_update_test", GetOptions{
+	result, err := table.Get("multi_update_test", GetOptions{
 		SortKey: "person3",
 		Result:  &Person{},
 	})
@@ -864,7 +876,9 @@ func TestUpdateMultipleFields(t *testing.T) {
 		t.Fatalf("Failed to get updated item: %v", err)
 	}
 
-	updatedPerson := result.(*Person)
+	value := result.Value
+
+	updatedPerson := value.(*Person)
 
 	if updatedPerson.Name != "Robert Wilson Jr." {
 		t.Fatalf("Expected name 'Robert Wilson Jr.', got %s", updatedPerson.Name)
@@ -874,7 +888,7 @@ func TestUpdateMultipleFields(t *testing.T) {
 		t.Fatalf("Expected email 'robert.wilson@newcompany.com', got %s", updatedPerson.Email)
 	}
 
-	fmt.Printf("Updated multiple fields: %+v, expirationTime: %v\n", updatedPerson, expirationTime)
+	fmt.Printf("Updated multiple fields: %+v, expirationTime: %v\n", updatedPerson, result.Expiry)
 }
 
 func TestUpdateNonExistentItem(t *testing.T) {
@@ -905,7 +919,7 @@ func TestUpdateNonExistentItem(t *testing.T) {
 	}
 
 	// Verify the item was created
-	result, expirationTime, err := table.Get("non_existent_key", GetOptions{
+	result, err := table.Get("non_existent_key", GetOptions{
 		SortKey: "missing",
 		Result:  &Person{},
 	})
@@ -913,7 +927,9 @@ func TestUpdateNonExistentItem(t *testing.T) {
 		t.Fatalf("Failed to get created item: %v", err)
 	}
 
-	createdPerson := result.(*Person)
+	value := result.Value
+
+	createdPerson := value.(*Person)
 
 	if createdPerson.Name != "Non Existent" {
 		t.Fatalf("Expected name 'Non Existent', got %s", createdPerson.Name)
@@ -923,5 +939,5 @@ func TestUpdateNonExistentItem(t *testing.T) {
 		t.Fatalf("Expected email 'nonexistent@example.com', got %s", createdPerson.Email)
 	}
 
-	fmt.Printf("Created item via update: %+v, expirationTime: %v\n", createdPerson, expirationTime)
+	fmt.Printf("Created item via update: %+v, expirationTime: %v\n", createdPerson, result.Expiry)
 }

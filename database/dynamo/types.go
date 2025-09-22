@@ -87,3 +87,9 @@ type QueryOptions struct {
 	SortKeyCondition      QueryCondition // Condition to apply to the sort key
 	Limit                 int            // Maximum number of items to return (0 = no limit)
 }
+
+type DynamoResult[T interface{}] struct {
+	Value   T
+	Expiry  *time.Time
+	SortKey string
+}
