@@ -744,8 +744,8 @@ func GetString(tableName, key string, sortKey ...string) (string, *time.Time, er
 
 	value, expirationTime, err := table.Get(key, opts)
 
-	if err != nil {
-		return "", nil, err
+	if err != nil || value == nil {
+		return "", expirationTime, err
 	}
 
 	return value.(string), expirationTime, nil
@@ -772,14 +772,14 @@ func GetInt(tableName, key string) (int, *time.Time, error) {
 
 	str, expirationTime, err := table.Get(key)
 
-	if err != nil {
-		return 0, nil, err
+	if err != nil || str == nil {
+		return 0, expirationTime, err
 	}
 
 	value, err := strconv.Atoi(str.(string))
 
 	if err != nil {
-		return 0, nil, err
+		return 0, expirationTime, err
 	}
 
 	return value, expirationTime, nil
