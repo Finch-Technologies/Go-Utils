@@ -488,6 +488,107 @@ func TestQueryBasic(t *testing.T) {
 		t.Fatalf("Expected 4 items, got %d", len(results))
 	}
 
+	// Create a map to check that all expected values are present (order may vary)
+	expectedValues := map[string]bool{
+		"profile_data":   false,
+		"settings_data":  false,
+		"session_data_1": false,
+		"session_data_2": false,
+	}
+
+	// Mark found values
+	for i, result := range results {
+		value, ok := result.Value.(string)
+		if !ok {
+			t.Fatalf("Result %d value should be string, got %T: %v", i, result.Value, result.Value)
+		}
+
+		if _, exists := expectedValues[value]; exists {
+			expectedValues[value] = true
+		} else {
+			t.Fatalf("Unexpected value found: %v", value)
+		}
+	}
+
+	// Verify all expected values were found
+	for expectedValue, found := range expectedValues {
+		if !found {
+			t.Fatalf("Expected value '%s' not found in results", expectedValue)
+		}
+	}
+
+	fmt.Printf("Query results: %v\n", results)
+}
+
+func TestQueryGeneric(t *testing.T) {
+	table, err := New(DbOptions{
+		TableName:        "dynamo.test",
+		ValueStoreMode:   ValueStoreModeJson,
+		SortKeyAttribute: "group_id",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to create table: %v", err)
+	}
+
+	// Insert multiple items with same partition key but different sort keys
+	testItems := []struct {
+		pk   string
+		sk   string
+		data string
+	}{
+		{"user1234", "profile", "profile_data"},
+		{"user1234", "settings", "settings_data"},
+		{"user1234", "session_abc", "session_data_1"},
+		{"user1234", "session_def", "session_data_2"},
+	}
+
+	for _, item := range testItems {
+		err = table.Put(item.pk, item.data, PutOptions{
+			SortKey: item.sk,
+			Ttl:     1 * time.Minute,
+		})
+		if err != nil {
+			t.Fatalf("Failed to put item %s/%s: %v", item.pk, item.sk, err)
+		}
+	}
+
+	// Query all items for user123
+	results, err := Query[string]("dynamo.test", "user1234")
+	if err != nil {
+		t.Fatalf("Failed to query: %v", err)
+	}
+
+	if len(results) != 4 {
+		t.Fatalf("Expected 4 items, got %d", len(results))
+	}
+
+	// Create a map to check that all expected values are present (order may vary)
+	expectedValues := map[string]bool{
+		"profile_data":   false,
+		"settings_data":  false,
+		"session_data_1": false,
+		"session_data_2": false,
+	}
+
+	// Mark found values
+	for _, result := range results {
+		value := result.Value
+
+		if _, exists := expectedValues[value]; exists {
+			expectedValues[value] = true
+		} else {
+			t.Fatalf("Unexpected value found: %v", value)
+		}
+	}
+
+	// Verify all expected values were found
+	for expectedValue, found := range expectedValues {
+		if !found {
+			t.Fatalf("Expected value '%s' not found in results", expectedValue)
+		}
+	}
+
 	fmt.Printf("Query results: %v\n", results)
 }
 

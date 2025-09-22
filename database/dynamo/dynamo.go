@@ -729,16 +729,46 @@ func Query[T any](tableName string, key string, options ...QueryOptions) ([]Quer
 	var result []QueryResult[T]
 
 	for _, item := range items {
-		var resultValue *T
-
-		itemValue := item.Value
+		var resultValue T
 
 		if item.Value != nil {
-			resultValue = itemValue.(*T)
+			// Handle different value storage modes and types
+			if table.valueStoreMode == ValueStoreModeJson {
+				// In JSON mode, the value is the raw data (string, number, etc.)
+				// Try direct type assertion first
+				if directValue, ok := item.Value.(T); ok {
+					resultValue = directValue
+				} else {
+					// If direct assertion fails, try JSON unmarshaling for complex types
+					if jsonStr, ok := item.Value.(string); ok {
+						// For string types, use the string directly
+						var zeroValue T
+						if reflect.TypeOf(zeroValue).Kind() == reflect.String {
+							resultValue = any(jsonStr).(T)
+						} else {
+							// For complex types, unmarshal from JSON
+							if err := json.Unmarshal([]byte(jsonStr), &resultValue); err != nil {
+								log.Error("Failed to unmarshal JSON in generic query: ", err)
+								continue
+							}
+						}
+					}
+				}
+			} else {
+				// In attribute mode, the value should be a pointer to the type
+				if ptrValue, ok := item.Value.(*T); ok {
+					resultValue = *ptrValue
+				} else {
+					// Try direct assertion
+					if directValue, ok := item.Value.(T); ok {
+						resultValue = directValue
+					}
+				}
+			}
 		}
 
 		result = append(result, QueryResult[T]{
-			Value:   *resultValue,
+			Value:   resultValue,
 			Expiry:  item.Expiry,
 			SortKey: item.SortKey,
 		})
