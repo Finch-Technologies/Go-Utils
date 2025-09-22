@@ -101,7 +101,7 @@ func New(options ...DbOptions) (*DynamoDB, error) {
 //	    SortKey: "profile",
 //	    Result:  &Person{},
 //	})
-func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
+func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, *time.Time, error) {
 
 	opts := getGetOptions(options...)
 
@@ -120,24 +120,31 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
 
 	if err != nil {
 		log.Error("Failed to get item from DynamoDB: ", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	if result.Item == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	//Check expiration time
-	var expirationTime int64
-	err = attributevalue.Unmarshal(result.Item["expiration_time"], &expirationTime)
+	var expirationTimestamp int64
+	err = attributevalue.Unmarshal(result.Item[d.ttlAttribute], &expirationTimestamp)
 
 	now := time.Now().Unix()
 
-	if err == nil && expirationTime > 0 && now > expirationTime {
-		if d.valueStoreMode == ValueStoreModeJson {
-			return "", nil
-		} else {
-			return nil, nil
+	var expirationTime *time.Time
+
+	if err == nil && expirationTimestamp > 0 {
+		unixTime := time.Unix(expirationTimestamp, 0)
+		expirationTime = &unixTime
+
+		if now > expirationTimestamp {
+			if d.valueStoreMode == ValueStoreModeJson {
+				return "", expirationTime, nil
+			} else {
+				return nil, expirationTime, nil
+			}
 		}
 	}
 
@@ -147,17 +154,17 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (interface{}, error) {
 		err = attributevalue.UnmarshalMap(result.Item, &resultItem)
 		if err != nil {
 			log.Error("Failed to unmarshal DynamoDB item: ", err)
-			return nil, err
+			return nil, expirationTime, err
 		}
 
-		return resultItem[d.valueAttribute], nil
+		return resultItem[d.valueAttribute], expirationTime, nil
 	} else {
 		err = attributevalue.UnmarshalMap(result.Item, &opts.Result)
 		if err != nil {
 			log.Error("Failed to unmarshal DynamoDB item: ", err)
-			return nil, err
+			return nil, expirationTime, err
 		}
-		return opts.Result, nil
+		return opts.Result, expirationTime, nil
 	}
 }
 
@@ -611,18 +618,19 @@ func (d *DynamoDB) Delete(key string, sortKey ...string) error {
 //
 // Returns:
 //   - *T: A pointer to the retrieved and unmarshaled item, or nil if the item doesn't exist
+//   - *expirationTime: A pointer to the time the item will expire, or nil if the item doesn't have a TTL
 //   - error: Returns an error if the retrieval fails, table doesn't exist, or unmarshaling fails
 //
 // The function automatically handles different storage modes (JSON vs native DynamoDB types)
 // and returns nil without error if the requested item doesn't exist in the table.
-func Get[T any](tableName string, key string, sortKey ...string) (*T, error) {
+func Get[T any](tableName string, key string, sortKey ...string) (*T, *time.Time, error) {
 
 	var value T
 
 	table, err := getTable(tableName)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	opts := GetOptions{
@@ -634,33 +642,33 @@ func Get[T any](tableName string, key string, sortKey ...string) (*T, error) {
 		opts.SortKey = sortKey[0]
 	}
 
-	valueInterface, err := table.Get(key, opts)
+	valueInterface, expirationTime, err := table.Get(key, opts)
 
 	if err != nil {
-		return nil, err
+		return nil, expirationTime, err
 	}
 
 	if table.valueStoreMode == ValueStoreModeJson {
 
 		if valueInterface == nil {
-			return nil, nil
+			return nil, expirationTime, nil
 		}
 
 		valueStr := valueInterface.(string)
 
 		if valueStr == "" {
-			return nil, nil
+			return nil, expirationTime, nil
 		}
 
 		err = json.Unmarshal([]byte(valueStr), &value)
 	} else {
 		if valueInterface == nil {
-			return nil, nil
+			return nil, expirationTime, nil
 		}
 		value = *valueInterface.(*T)
 	}
 
-	return &value, err
+	return &value, expirationTime, err
 }
 
 // Query is a generic utility function that performs a DynamoDB Query operation and returns
@@ -719,21 +727,28 @@ func Query[T any](tableName string, key string, options ...QueryOptions) ([]T, e
 //
 // Returns:
 //   - string: The string value stored in the table, or empty string if not found
+//   - *expirationTime: A pointer to the time the item will expire, or nil if the item doesn't have a TTL
 //   - error: Returns an error if the retrieval fails or the value cannot be converted to string
-func GetString(tableName, key string) (string, error) {
+func GetString(tableName, key string, sortKey ...string) (string, *time.Time, error) {
 	table, err := getTable(tableName)
 
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	value, err := table.Get(key)
+	opts := GetOptions{}
+
+	if len(sortKey) > 0 {
+		opts.SortKey = sortKey[0]
+	}
+
+	value, expirationTime, err := table.Get(key, opts)
 
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return value.(string), nil
+	return value.(string), expirationTime, nil
 }
 
 // GetInt is a utility function that retrieves an integer value from a DynamoDB table.
@@ -746,27 +761,28 @@ func GetString(tableName, key string) (string, error) {
 //
 // Returns:
 //   - int: The integer value converted from the stored string, or 0 if not found
+//   - *expirationTime: A pointer to the time the item will expire, or nil if the item doesn't have a TTL
 //   - error: Returns an error if retrieval fails or the value cannot be converted to integer
-func GetInt(tableName, key string) (int, error) {
+func GetInt(tableName, key string) (int, *time.Time, error) {
 	table, err := getTable(tableName)
 
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
-	str, err := table.Get(key)
+	str, expirationTime, err := table.Get(key)
 
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	value, err := strconv.Atoi(str.(string))
 
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
-	return value, nil
+	return value, expirationTime, nil
 }
 
 // Put is a utility function that stores an item in a DynamoDB table using the specified key.
