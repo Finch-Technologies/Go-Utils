@@ -88,7 +88,7 @@ type QueryOptions struct {
 	Limit                 int            // Maximum number of items to return (0 = no limit)
 }
 
-type DynamoResult[T interface{}] struct {
+type QueryResult[T interface{}] struct {
 	Value   T
 	Expiry  *time.Time
 	SortKey string

@@ -82,7 +82,8 @@ func New(options ...DbOptions) (*DynamoDB, error) {
 //   - options: Optional GetOptions containing sort key and result type information
 //
 // Returns:
-//   - DynamoResult[any]: The retrieved item (type depends on value store mode)
+//   - any: The retrieved item (type depends on value store mode)
+//   - *time.Time: The expiration time of the item
 //   - error: Error if retrieval fails
 //
 // Behavior:
@@ -94,10 +95,10 @@ func New(options ...DbOptions) (*DynamoDB, error) {
 // Example:
 //
 //	// Simple get
-//	item, err := db.Get("user123")
+//	item, expiry, err := db.Get("user123")
 //
 //	// Get with sort key and typed result
-//	result, err := db.Get("user123", GetOptions{
+//	result, expiry, err := db.Get("user123", GetOptions{
 //	    SortKey: "profile",
 //	    Result:  &Person{},
 //	})
@@ -177,7 +178,7 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (any, *time.Time, erro
 //   - options: Optional QueryOptions containing sort key conditions and result type information
 //
 // Returns:
-//   - []DynamoResult[any]: Slice of retrieved items (type depends on value store mode)
+//   - []QueryResult[any]: Slice of retrieved items (type depends on value store mode)
 //   - error: Error if query fails
 //
 // Features:
@@ -208,7 +209,7 @@ func (d *DynamoDB) Get(key string, options ...GetOptions) (any, *time.Time, erro
 //	people, err := db.Query("company1", QueryOptions{
 //	    Result: &Person{},
 //	})
-func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]DynamoResult[any], error) {
+func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]QueryResult[any], error) {
 	opts := getQueryOptions(options...)
 	now := time.Now().Unix()
 
@@ -265,7 +266,7 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]DynamoResult[an
 		return nil, fmt.Errorf("failed to query dynamodb: %w", err)
 	}
 
-	var items []DynamoResult[any]
+	var items []QueryResult[any]
 
 	for _, item := range result.Items {
 		// Check expiration time
@@ -293,7 +294,7 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]DynamoResult[an
 
 			value := resultItem[d.valueAttribute]
 
-			items = append(items, DynamoResult[any]{
+			items = append(items, QueryResult[any]{
 				Value:   value,
 				Expiry:  &expiryTime,
 				SortKey: sortKey,
@@ -319,7 +320,7 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]DynamoResult[an
 				continue
 			}
 
-			items = append(items, DynamoResult[any]{
+			items = append(items, QueryResult[any]{
 				Value:   resultItem,
 				Expiry:  &expiryTime,
 				SortKey: sortKey,
@@ -701,12 +702,12 @@ func Get[T any](tableName string, key string, sortKey ...string) (*T, *time.Time
 //   - options: Optional QueryOptions to specify sort key conditions, filters, limits, etc.
 //
 // Returns:
-//   - []T: A slice of retrieved and unmarshaled items matching the query criteria
+//   - []QueryResult[T]: A slice of retrieved and unmarshaled items matching the query criteria
 //   - error: Returns an error if the query fails, table doesn't exist, or unmarshaling fails
 //
 // The function automatically handles type conversion and returns an empty slice if no items
 // match the query criteria.
-func Query[T any](tableName string, key string, options ...QueryOptions) ([]DynamoResult[T], error) {
+func Query[T any](tableName string, key string, options ...QueryOptions) ([]QueryResult[T], error) {
 	table, err := getTable(tableName)
 
 	if err != nil {
@@ -725,7 +726,7 @@ func Query[T any](tableName string, key string, options ...QueryOptions) ([]Dyna
 		return nil, err
 	}
 
-	var result []DynamoResult[T]
+	var result []QueryResult[T]
 
 	for _, item := range items {
 		var resultValue *T
@@ -736,7 +737,7 @@ func Query[T any](tableName string, key string, options ...QueryOptions) ([]Dyna
 			resultValue = itemValue.(*T)
 		}
 
-		result = append(result, DynamoResult[T]{
+		result = append(result, QueryResult[T]{
 			Value:   *resultValue,
 			Expiry:  item.Expiry,
 			SortKey: item.SortKey,
