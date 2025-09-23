@@ -27,7 +27,13 @@ func getTable(tableName string) (*DynamoDB, error) {
 	table := tableMap[tableName]
 
 	if table == nil {
-		return nil, fmt.Errorf("table not found")
+		// If the table name is default and its not found, use the first table in the map
+		if tableName == "default" || tableName == "main" {
+			for _, table := range tableMap {
+				return table, nil
+			}
+		}
+		return nil, fmt.Errorf("table %s not found", tableName)
 	}
 
 	return table, nil

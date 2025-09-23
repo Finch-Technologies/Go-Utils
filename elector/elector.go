@@ -28,6 +28,7 @@ var elector *Elector
 
 // ElectorConfig holds configuration for the leader elector
 type ElectorConfig struct {
+	TableName     string
 	MinDelay      time.Duration
 	MaxDelay      time.Duration
 	CheckInterval time.Duration
@@ -45,13 +46,14 @@ type Elector struct {
 	cancel         context.CancelFunc
 	electionTicker *time.Ticker
 	mu             sync.RWMutex
-	store          *dynamo.DynamoDB
+	tableName      string
 	isLeader       bool
 }
 
 // getDefaultConfig returns the default configuration
 func getDefaultConfig() ElectorConfig {
 	return ElectorConfig{
+		TableName:     "default",
 		MinDelay:      defaultMinDelay,
 		MaxDelay:      defaultMaxDelay,
 		CheckInterval: defaultInterval,
@@ -60,7 +62,7 @@ func getDefaultConfig() ElectorConfig {
 	}
 }
 
-func Start(store *dynamo.DynamoDB, opts ...ElectorConfig) error {
+func Start(opts ...ElectorConfig) error {
 	defaultConfig := getDefaultConfig()
 
 	cfg := defaultConfig
@@ -83,7 +85,6 @@ func Start(store *dynamo.DynamoDB, opts ...ElectorConfig) error {
 	elector = &Elector{
 		isLeader:     false,
 		instanceID:   instanceID,
-		store:        store,
 		config:       cfg,
 		initialDelay: initialDelay,
 		ctx:          ctx,
@@ -189,7 +190,7 @@ func attemptLeadership() (bool, error) {
 	}
 
 	// Try to set ourselves as the leader
-	err = elector.store.Put(elector.config.KeyName, elector.instanceID, dynamo.PutOptions{
+	err = dynamo.Put(elector.config.TableName, elector.config.KeyName, elector.instanceID, dynamo.PutOptions{
 		Ttl: elector.config.LeaseTimeout,
 	})
 	if err != nil {
@@ -225,7 +226,7 @@ func renewLeadership() (bool, error) {
 	}
 
 	// Renew our lease
-	err = elector.store.Put(elector.config.KeyName, elector.instanceID, dynamo.PutOptions{
+	err = dynamo.Put(elector.config.TableName, elector.config.KeyName, elector.instanceID, dynamo.PutOptions{
 		Ttl: elector.config.LeaseTimeout,
 	})
 	if err != nil {
@@ -255,10 +256,9 @@ func revokeLeadership() error {
 		return nil
 	}
 
-	// Use Set with empty value and immediate expiration instead of Delete
-	err = elector.store.Put(elector.config.KeyName, "", dynamo.PutOptions{
-		Ttl: 0 * time.Millisecond, // Set to expire immediately
-	})
+	// Delete the leader lock
+	err = dynamo.Delete(elector.config.TableName, elector.config.KeyName)
+
 	if err != nil {
 		return fmt.Errorf("failed to revoke leadership: %w", err)
 	}
@@ -288,7 +288,7 @@ func getLeader() (string, error) {
 	// }
 
 	// Query the database directly (no cache)
-	result, _, err := elector.store.Get(elector.config.KeyName)
+	result, _, err := dynamo.GetString(elector.config.TableName, elector.config.KeyName)
 
 	if err != nil {
 		// Check if context was cancelled during the operation
@@ -300,11 +300,7 @@ func getLeader() (string, error) {
 		return "", fmt.Errorf("failed to get leader from store: %w", err)
 	}
 
-	if result == nil {
-		return "", nil
-	}
-
-	return result.(string), nil
+	return result, nil
 }
 
 // setLeader updates the leader status
