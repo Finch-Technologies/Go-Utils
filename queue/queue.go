@@ -99,7 +99,7 @@ func Enqueue[T interface{}](ctx context.Context, queue Queue, payload T, options
 	return mq.Enqueue(ctx, string(queue), string(jsonBytes))
 }
 
-func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.DequeueOptions) ([]types.QueueMessage[T], error) {
+func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.GenericDequeueOptions[T]) ([]types.QueueMessage[T], error) {
 
 	var messages []types.QueueMessage[T]
 
@@ -107,7 +107,19 @@ func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.D
 		return messages, fmt.Errorf("no queue driver found")
 	}
 
-	dequeuedMessages, err := mq.Dequeue(ctx, string(queue), options...)
+	dequeueOptions := types.DequeueOptions{
+		WaitTimeSeconds: 20,
+		BatchSize:       1,
+		DeleteMessage:   true,
+	}
+
+	if len(options) > 0 {
+		dequeueOptions.WaitTimeSeconds = options[0].WaitTimeSeconds
+		dequeueOptions.BatchSize = options[0].BatchSize
+		dequeueOptions.DeleteMessage = options[0].DeleteMessage
+	}
+
+	dequeuedMessages, err := mq.Dequeue(ctx, string(queue), dequeueOptions)
 
 	if err != nil {
 		return messages, fmt.Errorf("failed to dequeue item from queue: %s", err)
@@ -118,7 +130,7 @@ func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.D
 	}
 
 	for _, dequeuedMessage := range dequeuedMessages {
-		var payload any
+		var payload T
 
 		if options[0].ParseFunc != nil {
 			payload, err = options[0].ParseFunc(dequeuedMessage.Body)
@@ -133,7 +145,7 @@ func Dequeue[T interface{}](ctx context.Context, queue Queue, options ...types.D
 		messages = append(messages, types.QueueMessage[T]{
 			MessageId:               dequeuedMessage.MessageId,
 			ReceiptHandle:           dequeuedMessage.ReceiptHandle,
-			Payload:                 payload.(T),
+			Payload:                 payload,
 			ReceivedAt:              dequeuedMessage.ReceivedAt,
 			ApproximateReceiveCount: dequeuedMessage.ApproximateReceiveCount,
 		})

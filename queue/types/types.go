@@ -12,7 +12,13 @@ type DequeueOptions struct {
 	WaitTimeSeconds int
 	BatchSize       int
 	DeleteMessage   bool
-	ParseFunc       func(body string) (any, error)
+}
+
+type GenericDequeueOptions[T any] struct {
+	WaitTimeSeconds int
+	BatchSize       int
+	DeleteMessage   bool
+	ParseFunc       func(body string) (T, error)
 }
 
 type DequeuedMessage struct {

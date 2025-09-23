@@ -101,7 +101,6 @@ func getDequeueOptions(options []types.DequeueOptions) types.DequeueOptions {
 			WaitTimeSeconds: 10,
 			BatchSize:       1,
 			DeleteMessage:   true,
-			ParseFunc:       nil,
 		}
 	}
 	return options[0]
