@@ -19,20 +19,20 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-type S3Client struct {
-	Client    *s3.Client
+type Client struct {
+	s3Client  *s3.Client
 	Bucket    string
 	KeyPrefix string
 	Region    string
 }
 
-type S3Config struct {
+type Config struct {
 	Bucket    string
 	Region    string
 	KeyPrefix string
 }
 
-func New(config ...S3Config) (*S3Client, error) {
+func New(config ...Config) (*Client, error) {
 	cfg, err := getConfig(config...)
 
 	if err != nil {
@@ -59,16 +59,21 @@ func New(config ...S3Config) (*S3Client, error) {
 		client = s3.NewFromConfig(awsCfg)
 	}
 
-	return &S3Client{
-		Client:    client,
+	return &Client{
+		s3Client:  client,
 		Bucket:    cfg.Bucket,
 		KeyPrefix: cfg.KeyPrefix,
 		Region:    cfg.Region,
 	}, nil
 }
 
-func (s *S3Client) Upload(ctx context.Context, file []byte, key string, options ...UploadOptions) (string, error) {
+func (s *Client) Upload(ctx context.Context, file []byte, key string, options ...UploadOptions) (string, error) {
 	opts := getUploadOptions(options...)
+
+	// Add prefix to key if configured
+	if s.KeyPrefix != "" {
+		key = fmt.Sprintf("%s/%s", s.KeyPrefix, key)
+	}
 
 	putObjectInput := &s3.PutObjectInput{
 		Bucket: &s.Bucket,
@@ -88,14 +93,10 @@ func (s *S3Client) Upload(ctx context.Context, file []byte, key string, options 
 		putObjectInput.ContentLength = &opts.FileSize
 	}
 
-	_, err := s.Client.PutObject(ctx, putObjectInput)
+	_, err := s.s3Client.PutObject(ctx, putObjectInput)
 
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file to S3: %v", err)
-	}
-
-	if s.KeyPrefix != "" {
-		key = fmt.Sprintf("%s/%s", s.KeyPrefix, key)
 	}
 
 	var result string
@@ -115,9 +116,50 @@ func (s *S3Client) Upload(ctx context.Context, file []byte, key string, options 
 	return result, nil
 }
 
+// ListFiles lists files in the S3 bucket with the configured prefix
+func (s *Client) ListFiles(ctx context.Context, maxKeys int32) ([]FileInfo, error) {
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.Bucket),
+		Prefix: aws.String(s.KeyPrefix),
+	}
+	if maxKeys > 0 {
+		input.MaxKeys = &maxKeys
+	}
+
+	result, err := s.s3Client.ListObjectsV2(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list files in S3: %w", err)
+	}
+
+	var files []FileInfo
+	for _, obj := range result.Contents {
+		// Extract original filename from key (remove prefix)
+		name := strings.TrimPrefix(*obj.Key, s.KeyPrefix)
+
+		// If prefix was removed and there's a leading slash, remove it
+		if name != *obj.Key && strings.HasPrefix(name, "/") {
+			name = strings.TrimPrefix(name, "/")
+		}
+
+		var size int64
+		if obj.Size != nil {
+			size = *obj.Size
+		}
+
+		files = append(files, FileInfo{
+			Name:         name,
+			Size:         size,
+			LastModified: obj.LastModified,
+			S3Key:        *obj.Key,
+		})
+	}
+
+	return files, nil
+}
+
 // GeneratePresignedURL generates a presigned URL for file access
-func (s *S3Client) GeneratePresignedURL(ctx context.Context, key string, expirationMinutes int) (string, error) {
-	presignClient := s3.NewPresignClient(s.Client)
+func (s *Client) GeneratePresignedURL(ctx context.Context, key string, expirationMinutes int) (string, error) {
+	presignClient := s3.NewPresignClient(s.s3Client)
 
 	request, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.Bucket),
@@ -132,8 +174,13 @@ func (s *S3Client) GeneratePresignedURL(ctx context.Context, key string, expirat
 	return request.URL, nil
 }
 
-func (s *S3Client) Download(ctx context.Context, key string) ([]byte, error) {
-	output, err := s.Client.GetObject(ctx, &s3.GetObjectInput{
+func (s *Client) Download(ctx context.Context, key string) ([]byte, error) {
+	// Add prefix to key if configured
+	if s.KeyPrefix != "" {
+		key = fmt.Sprintf("%s/%s", s.KeyPrefix, key)
+	}
+
+	output, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: &s.Bucket,
 		Key:    &key,
 	})
@@ -151,8 +198,13 @@ func (s *S3Client) Download(ctx context.Context, key string) ([]byte, error) {
 }
 
 // DeleteFile deletes a file from S3
-func (s *S3Client) DeleteFile(ctx context.Context, key string) error {
-	_, err := s.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+func (s *Client) DeleteFile(ctx context.Context, key string) error {
+	// Add prefix to key if configured
+	if s.KeyPrefix != "" {
+		key = fmt.Sprintf("%s/%s", s.KeyPrefix, key)
+	}
+
+	_, err := s.s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.Bucket),
 		Key:    aws.String(key),
 	})
@@ -164,8 +216,13 @@ func (s *S3Client) DeleteFile(ctx context.Context, key string) error {
 }
 
 // FileExists checks if a file exists in S3
-func (s *S3Client) FileExists(ctx context.Context, key string) (bool, error) {
-	_, err := s.Client.HeadObject(ctx, &s3.HeadObjectInput{
+func (s *Client) FileExists(ctx context.Context, key string) (bool, error) {
+	// Add prefix to key if configured
+	if s.KeyPrefix != "" {
+		key = fmt.Sprintf("%s/%s", s.KeyPrefix, key)
+	}
+
+	_, err := s.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.Bucket),
 		Key:    aws.String(key),
 	})
@@ -186,8 +243,13 @@ func (s *S3Client) FileExists(ctx context.Context, key string) (bool, error) {
 }
 
 // getFileInfoFromAWS gets file info using AWS SDK (for private URLs)
-func (s *S3Client) GetS3FileInfo(ctx context.Context, bucket, key string) (*FileInfo, error) {
-	result, err := s.Client.HeadObject(ctx, &s3.HeadObjectInput{
+func (s *Client) GetS3FileInfo(ctx context.Context, bucket, key string) (*FileInfo, error) {
+	// Add prefix to key if configured and bucket matches client bucket
+	if s.KeyPrefix != "" && bucket == s.Bucket {
+		key = fmt.Sprintf("%s/%s", s.KeyPrefix, key)
+	}
+
+	result, err := s.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})

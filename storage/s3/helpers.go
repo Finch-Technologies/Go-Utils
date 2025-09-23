@@ -8,8 +8,8 @@ import (
 	"github.com/finch-technologies/go-utils/utils"
 )
 
-func getConfig(config ...S3Config) (*S3Config, error) {
-	defaultConfig := S3Config{
+func getConfig(config ...Config) (*Config, error) {
+	defaultConfig := Config{
 		Region: utils.StringOrDefault(os.Getenv("S3_REGION"), "af-south-1"),
 	}
 

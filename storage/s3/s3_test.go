@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,17 +16,17 @@ func TestNew(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		config      []S3Config
+		config      []Config
 		expectError bool
 	}{
 		{
 			name:        "no config provided",
-			config:      []S3Config{},
+			config:      []Config{},
 			expectError: true,
 		},
 		{
 			name: "valid config",
-			config: []S3Config{
+			config: []Config{
 				{
 					Bucket:    testBucket,
 					Region:    testRegion,
@@ -36,7 +37,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "config without bucket",
-			config: []S3Config{
+			config: []Config{
 				{
 					Region:    testRegion,
 					KeyPrefix: "test-prefix",
@@ -86,19 +87,19 @@ func TestNew(t *testing.T) {
 func TestS3Config(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      []S3Config
+		config      []Config
 		expectError bool
-		expected    *S3Config
+		expected    *Config
 	}{
 		{
 			name:        "no config",
-			config:      []S3Config{},
+			config:      []Config{},
 			expectError: true,
 			expected:    nil,
 		},
 		{
 			name: "valid config",
-			config: []S3Config{
+			config: []Config{
 				{
 					Bucket:    testBucket,
 					Region:    testRegion,
@@ -106,7 +107,7 @@ func TestS3Config(t *testing.T) {
 				},
 			},
 			expectError: false,
-			expected: &S3Config{
+			expected: &Config{
 				Bucket:    testBucket,
 				Region:    testRegion,
 				KeyPrefix: "uploads",
@@ -114,7 +115,7 @@ func TestS3Config(t *testing.T) {
 		},
 		{
 			name: "config without bucket",
-			config: []S3Config{
+			config: []Config{
 				{
 					Region:    testRegion,
 					KeyPrefix: "uploads",
@@ -125,13 +126,13 @@ func TestS3Config(t *testing.T) {
 		},
 		{
 			name: "config with defaults",
-			config: []S3Config{
+			config: []Config{
 				{
 					Bucket: testBucket,
 				},
 			},
 			expectError: false,
-			expected: &S3Config{
+			expected: &Config{
 				Bucket:    testBucket,
 				Region:    testRegion,
 				KeyPrefix: "",
@@ -364,7 +365,7 @@ func TestParseS3URL(t *testing.T) {
 
 // Integration tests that require actual S3 access
 func TestS3Integration(t *testing.T) {
-	client, err := New(S3Config{
+	client, err := New(Config{
 		Bucket:    testBucket,
 		Region:    testRegion,
 		KeyPrefix: "test",
@@ -525,11 +526,87 @@ func TestS3Integration(t *testing.T) {
 			t.Error("non-existent file should not exist")
 		}
 	})
+
+	t.Run("list files", func(t *testing.T) {
+		// Upload multiple test files first
+		testFiles := map[string][]byte{
+			"list-test-file1.txt": []byte("content1"),
+			"list-test-file2.txt": []byte("content2"),
+			"list-test-file3.txt": []byte("content3"),
+		}
+
+		// Upload test files
+		for key, content := range testFiles {
+			_, err := client.Upload(ctx, content, key)
+			if err != nil {
+				t.Fatalf("failed to upload test file %s: %v", key, err)
+			}
+		}
+
+		// Clean up test files after test
+		defer func() {
+			for key := range testFiles {
+				client.DeleteFile(ctx, key)
+			}
+		}()
+
+		// List files with no limit
+		files, err := client.ListFiles(ctx, 0)
+		if err != nil {
+			t.Errorf("failed to list files: %v", err)
+			return
+		}
+
+		// Check that our test files are in the list
+		foundFiles := make(map[string]bool)
+		for _, file := range files {
+			// The file.Name should already be processed by ListFiles to remove prefix
+			// Let's check against both the Name and the S3Key to be safe
+			baseName := strings.TrimPrefix(file.Name, "/")
+			s3KeyBase := filepath.Base(file.S3Key)
+
+			// Check if this file matches any of our test files
+			for testFileName := range testFiles {
+				if baseName == testFileName || s3KeyBase == testFileName || strings.HasSuffix(file.S3Key, testFileName) {
+					foundFiles[testFileName] = true
+
+					// Verify file properties
+					if file.Size != int64(len(testFiles[testFileName])) {
+						t.Errorf("file %s size mismatch: expected %d, got %d", testFileName, len(testFiles[testFileName]), file.Size)
+					}
+					if file.LastModified == nil {
+						t.Errorf("file %s should have LastModified time", testFileName)
+					}
+					if file.S3Key == "" {
+						t.Errorf("file %s should have S3Key", testFileName)
+					}
+					break
+				}
+			}
+		}
+
+		// Verify all test files were found
+		for fileName := range testFiles {
+			if !foundFiles[fileName] {
+				t.Errorf("test file %s not found in list", fileName)
+			}
+		}
+
+		// Test with limited results
+		limitedFiles, err := client.ListFiles(ctx, 2)
+		if err != nil {
+			t.Errorf("failed to list limited files: %v", err)
+		}
+
+		if len(limitedFiles) > 2 {
+			t.Errorf("expected at most 2 files with limit, got %d", len(limitedFiles))
+		}
+	})
 }
 
 func TestEdgeCases(t *testing.T) {
 	t.Run("empty file upload and download", func(t *testing.T) {
-		client, err := New(S3Config{
+		client, err := New(Config{
 			Bucket: testBucket,
 			Region: testRegion,
 		})
@@ -580,7 +657,7 @@ func TestEdgeCases(t *testing.T) {
 			largeContent[i] = byte(i % 256)
 		}
 
-		client, err := New(S3Config{
+		client, err := New(Config{
 			Bucket: testBucket,
 			Region: testRegion,
 		})
@@ -624,7 +701,7 @@ func TestEdgeCases(t *testing.T) {
 
 	t.Run("special characters in keys", func(t *testing.T) {
 
-		client, err := New(S3Config{
+		client, err := New(Config{
 			Bucket: testBucket,
 			Region: testRegion,
 		})
