@@ -1,4 +1,4 @@
-package types
+package s3
 
 import "time"
 
@@ -16,4 +16,13 @@ type UploadOptions struct {
 	FileSize        int64
 	Metadata        map[string]string
 	PresignedUrlTTL time.Duration
+}
+
+// FileInfo contains information about a stored file
+type FileInfo struct {
+	Name         string     `json:"name"`
+	Size         int64      `json:"size"`
+	ContentType  string     `json:"content_type,omitempty"`
+	LastModified *time.Time `json:"last_modified,omitempty"`
+	S3Key        string     `json:"s3_key,omitempty"`
 }
