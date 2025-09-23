@@ -137,10 +137,14 @@ func TestGenericQuery(t *testing.T) {
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
 	}, PutOptions{
-		Ttl: 1 * time.Minute,
+		Ttl:     1 * time.Minute,
+		SortKey: "emp001",
 	})
 
-	results, err := Query[Person]("dynamo.test", "test_generic_query")
+	results, err := Query[Person]("dynamo.test", "test_generic_query", QueryOptions{
+		SortKeyValue:     "emp",
+		SortKeyCondition: QueryConditionBeginsWith,
+	})
 
 	if err != nil {
 		t.Fatalf("Failed to query: %v", err)
@@ -191,7 +195,7 @@ func TestGenericQueryWithSortKey(t *testing.T) {
 	}
 
 	results, err := Query[Person](tableName, "org1", QueryOptions{
-		SortKey:          "emp",
+		SortKeyValue:     "emp",
 		SortKeyCondition: QueryConditionBeginsWith,
 	})
 
@@ -629,7 +633,7 @@ func TestQueryWithSortKeyConditions(t *testing.T) {
 	// Test begins_with condition
 	results, err := table.Query("user456", QueryOptions{
 		SortKeyCondition: QueryConditionBeginsWith,
-		SortKey:          "session_",
+		SortKeyValue:     "session_",
 	})
 	if err != nil {
 		t.Fatalf("Failed to query with begins_with: %v", err)
@@ -642,7 +646,7 @@ func TestQueryWithSortKeyConditions(t *testing.T) {
 	// Test equals condition
 	results, err = table.Query("user456", QueryOptions{
 		SortKeyCondition: QueryConditionEquals,
-		SortKey:          "002",
+		SortKeyValue:     "002",
 	})
 	if err != nil {
 		t.Fatalf("Failed to query with equals: %v", err)
@@ -655,7 +659,7 @@ func TestQueryWithSortKeyConditions(t *testing.T) {
 	// Test greater than condition
 	results, err = table.Query("user456", QueryOptions{
 		SortKeyCondition: QueryConditionGreaterThan,
-		SortKey:          "002",
+		SortKeyValue:     "002",
 	})
 	if err != nil {
 		t.Fatalf("Failed to query with greater than: %v", err)
@@ -791,7 +795,7 @@ func TestQueryInvalidSortKeyCondition(t *testing.T) {
 	// Test with invalid/unsupported condition
 	_, err = table.Query("user999", QueryOptions{
 		SortKeyCondition: "invalid_condition",
-		SortKey:          "test",
+		SortKeyValue:     "test",
 	})
 
 	if err == nil {
@@ -1108,7 +1112,7 @@ func TestNilAndEmptyValues(t *testing.T) {
 		// Query for sort keys that don't exist
 		results, err := table.Query("test-partition", QueryOptions{
 			SortKeyCondition: QueryConditionBeginsWith,
-			SortKey:          "nonexistent_",
+			SortKeyValue:     "nonexistent_",
 		})
 		if err != nil {
 			t.Fatalf("Expected no error for query with no matches, got: %v", err)
@@ -1460,7 +1464,7 @@ func TestIPAddressEntries(t *testing.T) {
 		// Query for IP addresses that start with "192."
 		results, err := table.Query(partitionKey, QueryOptions{
 			SortKeyCondition: QueryConditionBeginsWith,
-			SortKey:          "192.",
+			SortKeyValue:     "192.",
 		})
 		if err != nil {
 			t.Fatalf("Failed to query IPs with prefix: %v", err)
@@ -1496,7 +1500,7 @@ func TestIPAddressEntries(t *testing.T) {
 		// Query for IP addresses greater than "192.0.0.0" (lexicographic comparison)
 		results, err := table.Query(partitionKey, QueryOptions{
 			SortKeyCondition: QueryConditionGreaterThan,
-			SortKey:          "192.0.0.0",
+			SortKeyValue:     "192.0.0.0",
 		})
 		if err != nil {
 			t.Fatalf("Failed to query IPs by range: %v", err)

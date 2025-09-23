@@ -82,7 +82,7 @@ const (
 // QueryOptions contains options for DynamoDB Query operations
 type QueryOptions struct {
 	Result                any            // Pointer to struct where the results will be unmarshaled
-	SortKey               string         // Sort key value to apply the condition against
+	SortKeyValue          string         // Sort key value to apply the condition against
 	PartitionKeyCondition QueryCondition // Condition to apply to the partition key (usually equals)
 	SortKeyCondition      QueryCondition // Condition to apply to the sort key
 	Limit                 int            // Maximum number of items to return (0 = no limit)

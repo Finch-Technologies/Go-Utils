@@ -229,22 +229,22 @@ func (d *DynamoDB) Query(key string, options ...QueryOptions) ([]QueryResult[any
 		switch opts.SortKeyCondition {
 		case QueryConditionEquals:
 			keyConditionExpression += " AND #sk = :sk"
-			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKeyValue}
 		case QueryConditionBeginsWith:
 			keyConditionExpression += " AND begins_with(#sk, :sk)"
-			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKeyValue}
 		case QueryConditionGreaterThan:
 			keyConditionExpression += " AND #sk > :sk"
-			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKeyValue}
 		case QueryConditionLessThan:
 			keyConditionExpression += " AND #sk < :sk"
-			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKeyValue}
 		case QueryConditionGreaterThanOrEqualTo:
 			keyConditionExpression += " AND #sk >= :sk"
-			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKeyValue}
 		case QueryConditionLessThanOrEqualTo:
 			keyConditionExpression += " AND #sk <= :sk"
-			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKey}
+			expressionAttributeValues[":sk"] = &types.AttributeValueMemberS{Value: opts.SortKeyValue}
 		default:
 			return nil, fmt.Errorf("unsupported sort key condition: %s", opts.SortKeyCondition)
 		}
