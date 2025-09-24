@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/finch-technologies/go-utils/utils"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -356,4 +358,45 @@ func ParseS3URL(s3URL string) (bucket, key string, err error) {
 	}
 
 	return bucket, key, nil
+}
+
+// GetFileInfoFromHTTP gets file info using HTTP HEAD request (for public/signed URLs)
+func GetFileInfoFromHTTP(fileUrl string) (*FileInfo, error) {
+	resp, err := http.Head(fileUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to access S3 URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("S3 URL returned status: %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = utils.GetContentTypeFromURL(fileUrl)
+	}
+
+	fileSize := resp.ContentLength
+	if fileSize <= 0 {
+		return nil, fmt.Errorf("unable to determine file size from S3 URL")
+	}
+
+	// Extract filename from URL path
+	parsedURL, _ := url.Parse(fileUrl)
+	fileName := filepath.Base(parsedURL.Path)
+	if fileName == "" || fileName == "/" {
+		fileName = "document" + utils.GetExtensionFromContentType(contentType)
+	}
+
+	_, key, _ := ParseS3URL(fileUrl)
+
+	info := &FileInfo{
+		Name:        fileName,
+		Size:        fileSize,
+		ContentType: contentType,
+		S3Key:       key,
+	}
+
+	return info, nil
 }

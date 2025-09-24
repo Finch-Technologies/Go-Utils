@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	rand2 "math/rand/v2"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime/debug"
@@ -313,5 +314,43 @@ func MergeObjects[T any](objA *T, objB T) {
 		if objAValue.Field(i).Interface() == reflect.Zero(field.Type).Interface() {
 			objAValue.Field(i).Set(objBValue.Field(i))
 		}
+	}
+}
+
+// GetContentTypeFromURL tries to infer content type from file extension in URL
+func GetContentTypeFromURL(fileURL string) string {
+	ext := strings.ToLower(filepath.Ext(fileURL))
+	switch ext {
+	case ".pdf":
+		return "application/pdf"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".tiff", ".tif":
+		return "image/tiff"
+	case ".bmp":
+		return "image/bmp"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// GetExtensionFromContentType returns file extension based on content type
+func GetExtensionFromContentType(contentType string) string {
+	contentType = strings.ToLower(contentType)
+	switch contentType {
+	case "application/pdf":
+		return ".pdf"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/tiff":
+		return ".tiff"
+	case "image/bmp":
+		return ".bmp"
+	default:
+		return ".bin"
 	}
 }
