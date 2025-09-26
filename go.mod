@@ -15,6 +15,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.36.3
 	github.com/google/go-querystring v1.1.0
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/rs/zerolog v1.33.0

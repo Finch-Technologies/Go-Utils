@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/finch-technologies/go-utils/env"
+	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 )
 
@@ -18,6 +19,7 @@ type ZeroLogger struct {
 }
 
 func New(ctx context.Context, ctxFields any) *ZeroLogger {
+	godotenv.Load()
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	if os.Getenv("LOG_LEVEL") == "debug" {
