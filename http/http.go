@@ -208,10 +208,10 @@ func FetchRaw(ctx context.Context, uri, method string, payload interface{}, opti
 		ContentLength: int64(len(resp.Body)),
 	}
 
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("http request was unsuccessful with status code: %d. request url: %s", resp.StatusCode, uri)
-	} else if opts.ReturnResponse && resp.StatusCode >= 300 {
+	if opts.ReturnResponse && resp.StatusCode >= 300 {
 		return httpResp, fmt.Errorf("http request was unsuccessful with status code: %d. request url: %s", resp.StatusCode, uri)
+	} else if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("http request was unsuccessful with status code: %d. request url: %s", resp.StatusCode, uri)
 	}
 
 	if opts.ShowCurl {
