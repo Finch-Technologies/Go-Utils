@@ -19,12 +19,13 @@ import (
 )
 
 type FetchOptions struct {
-	Headers   *http.Header
-	Cookies   *[]http.Cookie
-	Proxy     *Proxy
-	ShowCurl  bool
-	RawBody   bool
-	CookieJar *cookiejar.Jar
+	Headers        *http.Header
+	Cookies        *[]http.Cookie
+	Proxy          *Proxy
+	ShowCurl       bool
+	RawBody        bool
+	CookieJar      *cookiejar.Jar
+	ReturnResponse bool
 }
 
 type Proxy struct {
@@ -209,6 +210,8 @@ func FetchRaw(ctx context.Context, uri, method string, payload interface{}, opti
 
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("http request was unsuccessful with status code: %d. request url: %s", resp.StatusCode, uri)
+	} else if opts.ReturnResponse && resp.StatusCode >= 300 {
+		return httpResp, fmt.Errorf("http request was unsuccessful with status code: %d. request url: %s", resp.StatusCode, uri)
 	}
 
 	if opts.ShowCurl {
