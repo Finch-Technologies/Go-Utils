@@ -95,6 +95,10 @@ func StartsWith(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
 
+func StripNonAlphanumeric(s string) string {
+	return regexp.MustCompile(`[^A-Za-z0-9\-_.]+`).ReplaceAllString(s, "")
+}
+
 const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const (
 	letterIdxBits = 6                    // 6 bits to represent a letter index
