@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/finch-technologies/go-utils/log"
+	"github.com/finch-technologies/go-utils/utils"
 	"github.com/google/go-querystring/query"
 )
 
@@ -26,6 +27,7 @@ type FetchOptions struct {
 	RawBody        bool
 	CookieJar      *cookiejar.Jar
 	ReturnResponse bool
+	Timeout        time.Duration
 }
 
 type Proxy struct {
@@ -184,12 +186,13 @@ func FetchRaw(ctx context.Context, uri, method string, payload interface{}, opti
 
 	var resp *HttpxResponse
 	var err error
+	timeout := utils.DurationOrDefault(opts.Timeout, 30*time.Second)
 
 	// Use our custom Request function with CookieJar support
 	if opts.CookieJar != nil {
-		resp, err = RequestWithCookieJar(ctx, method, uri, body, headers, proxyURL, 30*time.Second, opts.CookieJar)
+		resp, err = RequestWithCookieJar(ctx, method, uri, body, headers, proxyURL, timeout, opts.CookieJar)
 	} else {
-		resp, err = Request(ctx, method, uri, body, headers, proxyURL, 30*time.Second)
+		resp, err = Request(ctx, method, uri, body, headers, proxyURL, timeout)
 	}
 
 	if err != nil {
