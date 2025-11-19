@@ -114,15 +114,7 @@ func FetchRaw(ctx context.Context, uri, method string, payload interface{}, opti
 	opts := getOpts(options)
 
 	// Build proxy URL if proxy options exist
-	var proxyURL string
-	if opts.Proxy != nil {
-		proxyHost := regexp.MustCompile(`^(http|https)://`).ReplaceAllString(opts.Proxy.Host, "")
-		if opts.Proxy.Username != "" && opts.Proxy.Password != "" {
-			proxyURL = fmt.Sprintf("http://%s:%s@%s:%s", opts.Proxy.Username, opts.Proxy.Password, proxyHost, opts.Proxy.Port)
-		} else {
-			proxyURL = fmt.Sprintf("http://%s:%s", proxyHost, opts.Proxy.Port)
-		}
-	}
+	proxyURL := getProxyUrl(opts.Proxy)
 
 	// Convert headers to map[string]string
 	var headers map[string]string
@@ -284,7 +276,7 @@ func FetchData(ctx context.Context, apiURL, method, stage string, headers *http.
 
 // GetPublicIP returns the service's public-facing IP address by querying external IP detection services
 // This is useful when the service is behind NAT and you need the internet-visible IP address
-func GetPublicIP() (string, error) {
+func GetPublicIP(proxy *Proxy) (string, error) {
 
 	// List of IP detection services to try (in order)
 	services := []string{
@@ -293,9 +285,17 @@ func GetPublicIP() (string, error) {
 		"https://ifconfig.me/ip",
 	}
 
-	// Create HTTP client with timeout
+	// Create HTTP client with timeout and proxy
 	client := &http.Client{
 		Timeout: 5 * time.Second,
+	}
+
+	proxyURL, err := url.Parse(getProxyUrl(proxy))
+
+	if proxy != nil && err == nil {
+		client.Transport = &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		}
 	}
 
 	var lastErr error
@@ -331,4 +331,15 @@ func queryIPService(client *http.Client, url string) (string, error) {
 	// Trim whitespace and newlines
 	ip := strings.TrimSpace(string(body))
 	return ip, nil
+}
+
+func getProxyUrl(proxy *Proxy) string {
+	if proxy == nil {
+		return ""
+	}
+	proxyHost := regexp.MustCompile(`^(http|https)://`).ReplaceAllString(proxy.Host, "")
+	if proxy.Username != "" && proxy.Password != "" {
+		return fmt.Sprintf("http://%s:%s@%s:%s", proxy.Username, proxy.Password, proxyHost, proxy.Port)
+	}
+	return fmt.Sprintf("http://%s:%s", proxyHost, proxy.Port)
 }
