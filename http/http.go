@@ -281,3 +281,54 @@ func FetchData(ctx context.Context, apiURL, method, stage string, headers *http.
 
 	return string(bodyBytes), nil
 }
+
+// GetPublicIP returns the service's public-facing IP address by querying external IP detection services
+// This is useful when the service is behind NAT and you need the internet-visible IP address
+func GetPublicIP() (string, error) {
+
+	// List of IP detection services to try (in order)
+	services := []string{
+		"https://api.ipify.org",
+		"https://icanhazip.com",
+		"https://ifconfig.me/ip",
+	}
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	var lastErr error
+	for _, service := range services {
+		ip, err := queryIPService(client, service)
+		if err == nil && ip != "" {
+			return ip, nil
+		}
+		lastErr = err
+		log.Warningf("Failed to get public IP from %s: %v", service, err)
+	}
+
+	return "", lastErr
+}
+
+// queryIPService queries a single IP detection service
+func queryIPService(client *http.Client, url string) (string, error) {
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	// Trim whitespace and newlines
+	ip := strings.TrimSpace(string(body))
+	return ip, nil
+}
