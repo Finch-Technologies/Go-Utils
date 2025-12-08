@@ -2,7 +2,6 @@ package pubsub
 
 import (
 	"context"
-	"errors"
 
 	"github.com/finch-technologies/go-utils/pubsub/redis"
 )
@@ -44,7 +43,7 @@ func Init(options ...MessageBrokerOptions) (IMessageBroker, error) {
 		case MessageBrokerDriverRedis:
 			msgBroker = redis.New(opts.Db) //pubsub db
 		default:
-			return nil, errors.New("invalid message broker driver")
+			msgBroker = redis.New(opts.Db)
 		}
 	}
 
