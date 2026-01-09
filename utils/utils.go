@@ -268,11 +268,14 @@ func ParseJson[T interface{}](jsonStr string) (T, error) {
 func RegexSubMatch(r *regexp.Regexp, str string) map[string]string {
 	match := r.FindStringSubmatch(str)
 	subMatchMap := make(map[string]string)
+
+	if len(match) == 0 {
+		return subMatchMap
+	}
+
 	for i, name := range r.SubexpNames() {
 		if i != 0 {
-			if len(match) >= i {
-				subMatchMap[name] = match[i]
-			}
+			subMatchMap[name] = match[i]
 		}
 	}
 
