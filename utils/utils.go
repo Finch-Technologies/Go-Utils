@@ -277,6 +277,37 @@ func RegexSubMatch(r *regexp.Regexp, str string) map[string]string {
 	return subMatchMap
 }
 
+func Matches(pattern string, str string) (map[string]string, error) {
+	r, err := regexp.Compile(pattern)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return RegexSubMatch(r, str), nil
+}
+
+// Match checks if text matches any of the provided regex patterns
+func HasMatch(text string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if pattern == "" {
+			continue
+		}
+
+		matched, err := regexp.MatchString(pattern, text)
+		if err != nil {
+			// Log error but continue to next pattern
+			fmt.Printf("Warning: invalid regex pattern '%s': %v\n", pattern, err)
+			continue
+		}
+
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
 func ParseInt(s string) int {
 	value, err := strconv.Atoi(s)
 	if err != nil {
