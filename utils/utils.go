@@ -270,7 +270,9 @@ func RegexSubMatch(r *regexp.Regexp, str string) map[string]string {
 	subMatchMap := make(map[string]string)
 	for i, name := range r.SubexpNames() {
 		if i != 0 {
-			subMatchMap[name] = match[i]
+			if len(match) >= i {
+				subMatchMap[name] = match[i]
+			}
 		}
 	}
 
