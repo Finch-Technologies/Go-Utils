@@ -363,32 +363,46 @@ func ParseS3URL(s3URL string) (bucket, key string, err error) {
 // GetFileInfoFromHTTP gets file info using HTTP HEAD request (for public/signed URLs)
 func GetFileInfoFromHTTP(fileUrl string) (*FileInfo, error) {
 
+	headSuccess := true
+
 	resp, err := http.Head(fileUrl)
-	if err != nil {
+	if err != nil || resp.StatusCode != http.StatusOK {
+		headSuccess = false
+
 		//If HEAD fails, try minimal GET request that only loads one byte and headers
 		resp, err = minimalGet(fileUrl)
 		if err != nil {
 			return nil, fmt.Errorf("failed to access S3 URL: %w", err)
 		}
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("S3 URL returned status: %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("S3 URL returned status: %d", resp.StatusCode)
+		}
 	}
+
+	defer resp.Body.Close()
 
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = utils.GetContentTypeFromURL(fileUrl)
 	}
 
-	fileSize := resp.ContentLength
-	if fileSize <= 0 {
+	fileSize := int64(0)
+
+	if headSuccess {
+		fileSize = resp.ContentLength
+	} else {
 		contentRange := resp.Header.Get("Content-Range")
-		// bytes 0-0/12345
-		var totalSize int64
-		fmt.Sscanf(contentRange, "bytes %*d-%*d/%d", &totalSize)
-		fileSize = totalSize
+		if contentRange != "" {
+			// bytes 0-0/12345
+			var totalSize int64
+			fmt.Sscanf(contentRange, "bytes %*d-%*d/%d", &totalSize)
+			fileSize = totalSize
+		}
+	}
+
+	if fileSize <= 0 {
+		return nil, fmt.Errorf("unable to determine file size from URL")
 	}
 
 	// Extract filename from URL path
