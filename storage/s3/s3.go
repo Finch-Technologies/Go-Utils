@@ -372,11 +372,11 @@ func GetFileInfoFromHTTP(fileUrl string) (*FileInfo, error) {
 		//If HEAD fails, try minimal GET request that only loads one byte and headers
 		resp, err = minimalGet(fileUrl)
 		if err != nil {
-			return nil, fmt.Errorf("failed to access S3 URL: %w", err)
+			return nil, fmt.Errorf("failed to access URL: %w", err)
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("S3 URL returned status: %d", resp.StatusCode)
+		if resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("URL returned status: %d", resp.StatusCode)
 		}
 	}
 
