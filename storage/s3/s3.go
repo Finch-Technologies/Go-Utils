@@ -362,9 +362,14 @@ func ParseS3URL(s3URL string) (bucket, key string, err error) {
 
 // GetFileInfoFromHTTP gets file info using HTTP HEAD request (for public/signed URLs)
 func GetFileInfoFromHTTP(fileUrl string) (*FileInfo, error) {
+
 	resp, err := http.Head(fileUrl)
 	if err != nil {
-		return nil, fmt.Errorf("failed to access S3 URL: %w", err)
+		//If HEAD fails, try minimal GET request that only loads one byte and headers
+		resp, err = minimalGet(fileUrl)
+		if err != nil {
+			return nil, fmt.Errorf("failed to access S3 URL: %w", err)
+		}
 	}
 	defer resp.Body.Close()
 
@@ -379,7 +384,11 @@ func GetFileInfoFromHTTP(fileUrl string) (*FileInfo, error) {
 
 	fileSize := resp.ContentLength
 	if fileSize <= 0 {
-		return nil, fmt.Errorf("unable to determine file size from S3 URL")
+		contentRange := resp.Header.Get("Content-Range")
+		// bytes 0-0/12345
+		var totalSize int64
+		fmt.Sscanf(contentRange, "bytes %*d-%*d/%d", &totalSize)
+		fileSize = totalSize
 	}
 
 	// Extract filename from URL path
@@ -399,4 +408,25 @@ func GetFileInfoFromHTTP(fileUrl string) (*FileInfo, error) {
 	}
 
 	return info, nil
+}
+
+func minimalGet(url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		url,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Request only 1 byte
+	req.Header.Set("Range", "bytes=0-0")
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	return client.Do(req)
 }
