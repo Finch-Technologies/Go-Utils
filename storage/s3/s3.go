@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -394,10 +396,7 @@ func GetFileInfoFromHTTP(fileUrl string) (*FileInfo, error) {
 	} else {
 		contentRange := resp.Header.Get("Content-Range")
 		if contentRange != "" {
-			// bytes 0-0/12345
-			var totalSize int64
-			fmt.Sscanf(contentRange, "bytes %*d-%*d/%d", &totalSize)
-			fileSize = totalSize
+			fileSize, _ = getTotalSizeFromContentRange(contentRange)
 		}
 	}
 
@@ -443,4 +442,15 @@ func minimalGet(url string) (*http.Response, error) {
 	}
 
 	return client.Do(req)
+}
+
+func getTotalSizeFromContentRange(contentRange string) (int64, error) {
+	contentRangeRe := regexp.MustCompile(`bytes\s+\d+-\d+/(\d+)`)
+
+	m := contentRangeRe.FindStringSubmatch(contentRange)
+	if len(m) != 2 {
+		return 0, fmt.Errorf("invalid Content-Range header")
+	}
+
+	return strconv.ParseInt(m[1], 10, 64)
 }
