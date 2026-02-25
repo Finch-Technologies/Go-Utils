@@ -21,6 +21,7 @@ type LoggerInterface interface {
 	ErrorStack(stack, s string, v ...any)
 	DebugFields(msg string, fields map[string]any)
 	InfoFields(msg string, fields map[string]interface{})
+	WarningFields(msg string, fields map[string]interface{})
 	ErrorFields(msg string, fields map[string]interface{})
 	Fatal(v ...any)
 	Fatalf(s string, v ...any)

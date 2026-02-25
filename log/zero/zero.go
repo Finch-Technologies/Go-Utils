@@ -175,6 +175,15 @@ func (z *ZeroLogger) InfoFields(msg string, fields map[string]interface{}) {
 	event.Msg(msg)
 }
 
+// WarningFields logs a warning level message with structured fields
+func (z *ZeroLogger) WarningFields(msg string, fields map[string]interface{}) {
+	event := z.logger.Warn()
+	for k, v := range fields {
+		event = event.Interface(k, v)
+	}
+	event.Msg(msg)
+}
+
 // ErrorFields logs an error level message with structured fields
 func (z *ZeroLogger) ErrorFields(msg string, fields map[string]interface{}) {
 	event := z.logger.Error()

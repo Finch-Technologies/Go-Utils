@@ -72,6 +72,11 @@ func InfoFields(msg string, fields map[string]interface{}) {
 	logger.InfoFields(msg, fields)
 }
 
+// WarningFields logs a warning level message with structured fields
+func WarningFields(msg string, fields map[string]interface{}) {
+	logger.WarningFields(msg, fields)
+}
+
 // ErrorFields logs an error level message with structured fields
 func ErrorFields(msg string, fields map[string]interface{}) {
 	logger.ErrorFields(msg, fields)
