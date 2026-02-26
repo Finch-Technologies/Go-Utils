@@ -9,56 +9,64 @@ import (
 	"github.com/finch-technologies/go-utils/utils"
 )
 
-type SafeChannel[T interface{}] struct {
-	mu       sync.Mutex
-	isClosed bool
-	ch       chan T
-	ctx      context.Context
+type SafeChannel[T any] struct {
+	ch   chan T
+	ctx  context.Context
+	once sync.Once
+	done chan struct{}
 }
 
-func New[T interface{}](ctx context.Context, size ...int) *SafeChannel[T] {
+func New[T any](ctx context.Context, size ...int) *SafeChannel[T] {
 	var ch chan T
-	sc := &SafeChannel[T]{}
 	if len(size) > 0 {
 		ch = make(chan T, size[0])
 	} else {
 		ch = make(chan T)
 	}
-	sc.init(ctx, ch)
+
+	sc := &SafeChannel[T]{
+		ch:   ch,
+		ctx:  ctx,
+		done: make(chan struct{}),
+	}
+
+	go utils.Try(func() {
+		<-ctx.Done()
+		sc.Close()
+	}, log.FromContext(ctx))
+
 	return sc
 }
 
-func (c *SafeChannel[T]) init(ctx context.Context, ch chan T) {
-	c.mu = sync.Mutex{}
-	c.ctx = ctx
-	c.isClosed = false
-	c.ch = ch
-	go utils.Try(func() {
-		// Ensure the channel is closed when the context is done
-		<-ctx.Done()
-		c.Close()
-	}, log.FromContext(ctx))
-}
-
 func (c *SafeChannel[T]) Close() {
-	c.mu.Lock()
-	if !c.isClosed {
-		c.isClosed = true
+	c.once.Do(func() {
+		close(c.done)
 		close(c.ch)
-	}
-	c.mu.Unlock()
+	})
 }
 
 func (c *SafeChannel[T]) Write(data T) error {
-	c.mu.Lock()
-	if c.isClosed {
-		c.mu.Unlock()
+	select {
+	case <-c.done:
 		return errors.New("channel is closed")
+	case <-c.ctx.Done():
+		return errors.New("channel is closed")
+	case c.ch <- data:
+		return nil
 	}
-	c.mu.Unlock()
-	c.ch <- data
+}
 
-	return nil
+func (c *SafeChannel[T]) TryWrite(data T) (bool, error) {
+	select {
+	case <-c.done:
+		return false, errors.New("channel is closed")
+	case <-c.ctx.Done():
+		return false, errors.New("channel is closed")
+	case c.ch <- data:
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func (c *SafeChannel[T]) Read() <-chan T {
