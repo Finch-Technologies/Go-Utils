@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"runtime"
+	runtimemetrics "runtime/metrics"
 	"time"
 
 	"github.com/finch-technologies/go-utils/env"
@@ -15,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -128,6 +131,10 @@ func Init(ctx context.Context, options ...Options) (shutdown func(context.Contex
 		sdkmetric.WithResource(res),
 	)
 	otel.SetMeterProvider(mp)
+
+	if err := startRuntimeMetrics(); err != nil {
+		log.Warning("OTEL runtime metrics: failed to register — " + err.Error())
+	}
 
 	log.Info("OTEL telemetry initialised — exporting to " + opts.endpoint() + " via " + opts.Protocol)
 
@@ -303,4 +310,80 @@ func probeHTTP(ctx context.Context, baseURL string, client *http.Client) {
 	}
 	resp.Body.Close()
 	log.Info(fmt.Sprintf("OTEL HTTP probe: collector reachable at %s (HTTP %d)", baseURL, resp.StatusCode))
+}
+
+// startRuntimeMetrics registers async observable instruments that sample Go
+// runtime CPU and memory statistics on every metric collection cycle.
+//
+// Metrics emitted:
+//   - process.runtime.go.mem.heap_inuse  (gauge, bytes) — live heap objects
+//   - process.runtime.go.mem.heap_sys    (gauge, bytes) — heap memory from OS
+//   - process.runtime.go.mem.sys         (gauge, bytes) — total memory from OS
+//   - process.runtime.go.goroutines      (gauge, count) — live goroutines
+//   - process.runtime.go.cpu.time        (counter, seconds) — cumulative CPU time
+func startRuntimeMetrics() error {
+	m := otel.Meter("process/runtime")
+
+	heapInuse, err := m.Int64ObservableGauge("process.runtime.go.mem.heap_inuse",
+		metric.WithDescription("Bytes of live heap objects"),
+		metric.WithUnit("By"),
+	)
+	if err != nil {
+		return err
+	}
+
+	heapSys, err := m.Int64ObservableGauge("process.runtime.go.mem.heap_sys",
+		metric.WithDescription("Bytes of heap memory obtained from the OS"),
+		metric.WithUnit("By"),
+	)
+	if err != nil {
+		return err
+	}
+
+	totalSys, err := m.Int64ObservableGauge("process.runtime.go.mem.sys",
+		metric.WithDescription("Total bytes of memory obtained from the OS"),
+		metric.WithUnit("By"),
+	)
+	if err != nil {
+		return err
+	}
+
+	goroutines, err := m.Int64ObservableGauge("process.runtime.go.goroutines",
+		metric.WithDescription("Number of goroutines that currently exist"),
+	)
+	if err != nil {
+		return err
+	}
+
+	cpuTime, err := m.Float64ObservableCounter("process.runtime.go.cpu.time",
+		metric.WithDescription("Cumulative CPU time consumed by the Go process (user + system + GC)"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		return err
+	}
+
+	// Pre-allocate the runtime/metrics sample slice — reused on every callback.
+	cpuSamples := []runtimemetrics.Sample{
+		{Name: "/cpu/classes/total:cpu-seconds"},
+	}
+
+	_, err = m.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+
+		o.ObserveInt64(heapInuse, int64(ms.HeapInuse))
+		o.ObserveInt64(heapSys, int64(ms.HeapSys))
+		o.ObserveInt64(totalSys, int64(ms.Sys))
+		o.ObserveInt64(goroutines, int64(runtime.NumGoroutine()))
+
+		runtimemetrics.Read(cpuSamples)
+		if cpuSamples[0].Value.Kind() == runtimemetrics.KindFloat64 {
+			o.ObserveFloat64(cpuTime, cpuSamples[0].Value.Float64())
+		}
+
+		return nil
+	}, heapInuse, heapSys, totalSys, goroutines, cpuTime)
+
+	return err
 }
