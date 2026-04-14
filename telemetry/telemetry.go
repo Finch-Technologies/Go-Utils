@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -310,6 +311,31 @@ func probeHTTP(ctx context.Context, baseURL string, client *http.Client) {
 	}
 	resp.Body.Close()
 	log.Info(fmt.Sprintf("OTEL HTTP probe: collector reachable at %s (HTTP %d)", baseURL, resp.StatusCode))
+}
+
+// TraceFields merges the active trace_id and span_id from ctx into a copy of
+// fields so that structured log entries can be correlated with APM traces.
+// Returns fields unchanged when ctx holds no valid span (e.g. telemetry disabled).
+//
+// Usage:
+//
+//	log.InfoFields("webhook delivered", telemetry.TraceFields(ctx, map[string]any{
+//	    "url":    job.URL,
+//	    "tenant": job.Tenant,
+//	}))
+func TraceFields(ctx context.Context, fields map[string]any) map[string]any {
+	span := trace.SpanFromContext(ctx)
+	if !span.SpanContext().IsValid() {
+		return fields
+	}
+	sc := span.SpanContext()
+	enriched := make(map[string]any, len(fields)+2)
+	for k, v := range fields {
+		enriched[k] = v
+	}
+	enriched["trace_id"] = sc.TraceID().String()
+	enriched["span_id"] = sc.SpanID().String()
+	return enriched
 }
 
 // startRuntimeMetrics registers async observable instruments that sample Go
