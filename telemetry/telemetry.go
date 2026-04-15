@@ -92,6 +92,7 @@ func Init(ctx context.Context, options ...Options) (shutdown func(context.Contex
 			semconv.ServiceName(opts.ServiceName),
 			semconv.DeploymentEnvironment(opts.Environment),
 		),
+		resource.WithTelemetrySDK(), // sets telemetry.sdk.language=go → service.language.name in Elastic APM
 		resource.WithProcess(),
 		resource.WithHost(),
 	)
