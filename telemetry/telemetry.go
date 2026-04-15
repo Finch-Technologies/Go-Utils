@@ -133,6 +133,9 @@ func Init(ctx context.Context, options ...Options) (shutdown func(context.Contex
 		sdkmetric.WithResource(res),
 	)
 	otel.SetMeterProvider(mp)
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		log.Error("OTEL exporter error: " + err.Error())
+	}))
 
 	if err := startRuntimeMetrics(); err != nil {
 		log.Warning("OTEL runtime metrics: failed to register — " + err.Error())
@@ -191,18 +194,19 @@ func buildGRPCExporters(ctx context.Context, opts Options) (sdktrace.SpanExporte
 
 	probeGRPC(ctx, opts.endpoint(), dialOpts)
 
-	traceExp, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(opts.endpoint()),
-		otlptracegrpc.WithDialOption(dialOpts...),
-	)
+	// Use a shared pre-configured connection so the exporters cannot override
+	// the transport credentials with their own defaults.
+	conn, err := grpc.NewClient(opts.endpoint(), dialOpts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create gRPC connection: %w", err)
+	}
+
+	traceExp, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create gRPC trace exporter: %w", err)
 	}
 
-	metricExp, err := otlpmetricgrpc.New(ctx,
-		otlpmetricgrpc.WithEndpoint(opts.endpoint()),
-		otlpmetricgrpc.WithDialOption(dialOpts...),
-	)
+	metricExp, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create gRPC metric exporter: %w", err)
 	}
