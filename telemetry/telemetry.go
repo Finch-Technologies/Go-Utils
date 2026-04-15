@@ -346,47 +346,63 @@ func TraceFields(ctx context.Context, fields map[string]any) map[string]any {
 // startRuntimeMetrics registers async observable instruments that sample Go
 // runtime CPU and memory statistics on every metric collection cycle.
 //
-// Metrics emitted:
-//   - process.runtime.go.mem.heap_inuse  (gauge, bytes) — live heap objects
-//   - process.runtime.go.mem.heap_sys    (gauge, bytes) — heap memory from OS
-//   - process.runtime.go.mem.sys         (gauge, bytes) — total memory from OS
-//   - process.runtime.go.goroutines      (gauge, count) — live goroutines
-//   - process.runtime.go.cpu.time        (counter, seconds) — cumulative CPU time
+// Metrics emitted follow OpenTelemetry semantic conventions for Go runtime:
+//   - go.memory.used        (gauge, bytes)   — heap memory in use by live objects
+//   - go.memory.allocated   (gauge, bytes)   — heap memory allocated by the application
+//   - go.memory.allocations (counter, count) — cumulative heap allocation count
+//   - go.memory.gc.goal     (gauge, bytes)   — target heap size for the next GC cycle
+//   - go.goroutine.count    (gauge, count)   — live goroutines
+//   - go.processor.limit    (gauge, count)   — GOMAXPROCS (OS threads for Go code)
+//   - go.cpu.time           (counter, seconds) — cumulative CPU time
 func startRuntimeMetrics() error {
-	m := otel.Meter("process/runtime")
+	m := otel.Meter("go.runtime")
 
-	heapInuse, err := m.Int64ObservableGauge("process.runtime.go.mem.heap_inuse",
-		metric.WithDescription("Bytes of live heap objects"),
+	memUsed, err := m.Int64ObservableGauge("go.memory.used",
+		metric.WithDescription("Heap memory in use by live objects"),
 		metric.WithUnit("By"),
 	)
 	if err != nil {
 		return err
 	}
 
-	heapSys, err := m.Int64ObservableGauge("process.runtime.go.mem.heap_sys",
-		metric.WithDescription("Bytes of heap memory obtained from the OS"),
+	memAllocated, err := m.Int64ObservableGauge("go.memory.allocated",
+		metric.WithDescription("Heap memory allocated by the application"),
 		metric.WithUnit("By"),
 	)
 	if err != nil {
 		return err
 	}
 
-	totalSys, err := m.Int64ObservableGauge("process.runtime.go.mem.sys",
-		metric.WithDescription("Total bytes of memory obtained from the OS"),
+	memAllocations, err := m.Int64ObservableCounter("go.memory.allocations",
+		metric.WithDescription("Cumulative count of heap allocations"),
+	)
+	if err != nil {
+		return err
+	}
+
+	memGCGoal, err := m.Int64ObservableGauge("go.memory.gc.goal",
+		metric.WithDescription("Target heap size for the next GC cycle"),
 		metric.WithUnit("By"),
 	)
 	if err != nil {
 		return err
 	}
 
-	goroutines, err := m.Int64ObservableGauge("process.runtime.go.goroutines",
-		metric.WithDescription("Number of goroutines that currently exist"),
+	goroutines, err := m.Int64ObservableGauge("go.goroutine.count",
+		metric.WithDescription("Number of live goroutines"),
 	)
 	if err != nil {
 		return err
 	}
 
-	cpuTime, err := m.Float64ObservableCounter("process.runtime.go.cpu.time",
+	processorLimit, err := m.Int64ObservableGauge("go.processor.limit",
+		metric.WithDescription("Number of OS threads that can execute user-level Go code simultaneously (GOMAXPROCS)"),
+	)
+	if err != nil {
+		return err
+	}
+
+	cpuTime, err := m.Float64ObservableCounter("go.cpu.time",
 		metric.WithDescription("Cumulative CPU time consumed by the Go process (user + system + GC)"),
 		metric.WithUnit("s"),
 	)
@@ -403,10 +419,12 @@ func startRuntimeMetrics() error {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
 
-		o.ObserveInt64(heapInuse, int64(ms.HeapInuse))
-		o.ObserveInt64(heapSys, int64(ms.HeapSys))
-		o.ObserveInt64(totalSys, int64(ms.Sys))
+		o.ObserveInt64(memUsed, int64(ms.HeapInuse))
+		o.ObserveInt64(memAllocated, int64(ms.HeapAlloc))
+		o.ObserveInt64(memAllocations, int64(ms.Mallocs))
+		o.ObserveInt64(memGCGoal, int64(ms.NextGC))
 		o.ObserveInt64(goroutines, int64(runtime.NumGoroutine()))
+		o.ObserveInt64(processorLimit, int64(runtime.GOMAXPROCS(0)))
 
 		runtimemetrics.Read(cpuSamples)
 		if cpuSamples[0].Value.Kind() == runtimemetrics.KindFloat64 {
@@ -414,7 +432,7 @@ func startRuntimeMetrics() error {
 		}
 
 		return nil
-	}, heapInuse, heapSys, totalSys, goroutines, cpuTime)
+	}, memUsed, memAllocated, memAllocations, memGCGoal, goroutines, processorLimit, cpuTime)
 
 	return err
 }
