@@ -21,6 +21,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
@@ -206,7 +207,10 @@ func buildGRPCExporters(ctx context.Context, opts Options) (sdktrace.SpanExporte
 		return nil, nil, fmt.Errorf("failed to create gRPC trace exporter: %w", err)
 	}
 
-	metricExp, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
+	metricExp, err := otlpmetricgrpc.New(ctx,
+		otlpmetricgrpc.WithGRPCConn(conn),
+		otlpmetricgrpc.WithTemporalitySelector(deltaTemporalitySelector),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create gRPC metric exporter: %w", err)
 	}
@@ -258,6 +262,7 @@ func buildHTTPExporters(ctx context.Context, opts Options) (sdktrace.SpanExporte
 		otlpmetrichttp.WithEndpoint(opts.endpoint()),
 		otlpmetrichttp.WithHTTPClient(httpClient),
 		metricInsecureOpt,
+		otlpmetrichttp.WithTemporalitySelector(deltaTemporalitySelector),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create HTTP metric exporter: %w", err)
@@ -341,6 +346,24 @@ func TraceFields(ctx context.Context, fields map[string]any) map[string]any {
 	enriched["trace_id"] = sc.TraceID().String()
 	enriched["span_id"] = sc.SpanID().String()
 	return enriched
+}
+
+// deltaTemporalitySelector returns Delta temporality for counter and histogram
+// instruments so that each periodic export contains only the per-interval
+// increment rather than the running total since process start. Gauges keep
+// Cumulative temporality since they represent a point-in-time snapshot.
+//
+// This allows Kibana / Elasticsearch to sum or rate individual exports
+// directly, without needing to diff successive cumulative values.
+func deltaTemporalitySelector(kind sdkmetric.InstrumentKind) metricdata.Temporality {
+	switch kind {
+	case sdkmetric.InstrumentKindCounter,
+		sdkmetric.InstrumentKindHistogram,
+		sdkmetric.InstrumentKindObservableCounter:
+		return metricdata.DeltaTemporality
+	default:
+		return metricdata.CumulativeTemporality
+	}
 }
 
 // startRuntimeMetrics registers async observable instruments that sample Go
