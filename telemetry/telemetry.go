@@ -19,12 +19,12 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -174,7 +174,7 @@ func getOptions(options ...Options) Options {
 		Environment:    env.GetOrDefault("ENVIRONMENT", "local"),
 		Protocol:       env.GetOrDefault("OTEL_PROTOCOL", "http"),
 		Insecure:       env.GetOrDefault("OTEL_INSECURE", "true") == "true",
-		MetricInterval: 30 * time.Second,
+		MetricInterval: 1 * time.Minute,
 	}
 
 	if len(options) == 0 {
