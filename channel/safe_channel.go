@@ -45,7 +45,12 @@ func (c *SafeChannel[T]) Close() {
 	})
 }
 
-func (c *SafeChannel[T]) Write(data T) error {
+func (c *SafeChannel[T]) Write(data T) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New("channel is closed")
+		}
+	}()
 	select {
 	case <-c.done:
 		return errors.New("channel is closed")
@@ -56,7 +61,12 @@ func (c *SafeChannel[T]) Write(data T) error {
 	}
 }
 
-func (c *SafeChannel[T]) TryWrite(data T) (bool, error) {
+func (c *SafeChannel[T]) TryWrite(data T) (ok bool, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			ok, err = false, errors.New("channel is closed")
+		}
+	}()
 	select {
 	case <-c.done:
 		return false, errors.New("channel is closed")
