@@ -1,29 +1,7 @@
 package log
 
-import (
-	"context"
-)
+import "github.com/finch-technologies/go-utils/log/logtype"
 
-type LoggerInterface interface {
-	Debug(v ...any)
-	Debugf(s string, v ...any)
-	Info(v ...any)
-	Infof(s string, v ...any)
-	InfoEvent(eventType string, data string)
-	ErrorEvent(eventType string, data string)
-	ErrorEventWithResources(eventType string, screenshot, text, data string)
-	InfoFile(filePath string, data string)
-	ErrorFile(filePath string, data string)
-	Warning(v ...any)
-	Warningf(s string, v ...any)
-	Error(v ...any)
-	Errorf(s string, v ...any)
-	ErrorStack(stack, s string, v ...any)
-	DebugFields(msg string, fields map[string]any)
-	InfoFields(msg string, fields map[string]interface{})
-	WarningFields(msg string, fields map[string]interface{})
-	ErrorFields(msg string, fields map[string]interface{})
-	Fatal(v ...any)
-	Fatalf(s string, v ...any)
-	GetContext() context.Context
-}
+// LoggerInterface is the logger contract used throughout the application.
+// It is an alias for logtype.Logger so both names resolve to the same type.
+type LoggerInterface = logtype.Logger

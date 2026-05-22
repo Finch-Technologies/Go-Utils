@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/finch-technologies/go-utils/env"
+	"github.com/finch-technologies/go-utils/log/logtype"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
@@ -96,6 +97,33 @@ func getKeyValues(ctx interface{}) map[string]string {
 	}
 
 	return kvMap
+}
+
+// AddFields returns a new ZeroLogger with the given fields added to every log entry.
+// fields can be a struct (exported field names become keys), map[string]any, or map[string]string.
+func (z *ZeroLogger) WithFields(fields any) logtype.Logger {
+	ctx := z.logger.With()
+	switch f := fields.(type) {
+	case map[string]any:
+		for k, v := range f {
+			ctx = ctx.Interface(k, v)
+		}
+	case map[string]string:
+		for k, v := range f {
+			ctx = ctx.Str(k, v)
+		}
+	default:
+		for k, v := range getKeyValues(fields) {
+			if v != "" {
+				ctx = ctx.Str(k, v)
+			}
+		}
+	}
+	logger := ctx.Logger()
+	return &ZeroLogger{
+		logger:  &logger,
+		context: z.context,
+	}
 }
 
 func (z *ZeroLogger) GetLogger() *zerolog.Logger {
