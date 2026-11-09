@@ -28,6 +28,7 @@ type FetchOptions struct {
 	CookieJar      *cookiejar.Jar
 	ReturnResponse bool
 	Timeout        time.Duration
+	ForceHTTP2     bool
 }
 
 type Proxy struct {
@@ -181,7 +182,9 @@ func FetchRaw(ctx context.Context, uri, method string, payload interface{}, opti
 	timeout := utils.DurationOrDefault(opts.Timeout, 30*time.Second)
 
 	// Use our custom Request function with CookieJar support
-	if opts.CookieJar != nil {
+	if opts.ForceHTTP2 {
+		resp, err = RequestWithOptions(ctx, method, uri, body, headers, proxyURL, timeout, opts.CookieJar, true)
+	} else if opts.CookieJar != nil {
 		resp, err = RequestWithCookieJar(ctx, method, uri, body, headers, proxyURL, timeout, opts.CookieJar)
 	} else {
 		resp, err = Request(ctx, method, uri, body, headers, proxyURL, timeout)

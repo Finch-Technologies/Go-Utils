@@ -196,3 +196,43 @@ func RequestWithCookieJar(ctx context.Context, method, url string, body []byte, 
 		ProxyIP:    resp.ProxyIP,
 	}, nil
 }
+
+func RequestWithOptions(ctx context.Context, method, url string, body []byte, headers map[string]string, proxyURL string, timeout time.Duration, cookieJar *cookiejar.Jar, forceHTTP2 bool) (*HttpxResponse, error) {
+	var client *Client
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+	if cookieJar != nil {
+		client = NewClientWithCookieJar(timeout, tlsConfig, cookieJar)
+	} else {
+		client = NewClient(timeout, tlsConfig)
+	}
+
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	opts := RequestOptions{
+		Method:     method,
+		URL:        url,
+		Body:       bodyReader,
+		Headers:    headers,
+		ProxyURL:   proxyURL,
+		Timeout:    timeout,
+		CookieJar:  cookieJar,
+		ForceHTTP2: forceHTTP2,
+	}
+
+	resp, err := client.Do(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &HttpxResponse{
+		StatusCode: resp.StatusCode,
+		Headers:    resp.Headers,
+		Body:       resp.Body,
+		ProxyIP:    resp.ProxyIP,
+	}, nil
+}

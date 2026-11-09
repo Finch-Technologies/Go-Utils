@@ -25,14 +25,15 @@ type Response struct {
 
 // RequestOptions contains options for making HTTP requests
 type RequestOptions struct {
-	Method    string
-	URL       string
-	Body      io.Reader
-	Headers   map[string]string
-	ProxyURL  string
-	Timeout   time.Duration
-	TLSConfig *tls.Config
-	CookieJar *cookiejar.Jar
+	Method     string
+	URL        string
+	Body       io.Reader
+	Headers    map[string]string
+	ProxyURL   string
+	Timeout    time.Duration
+	TLSConfig  *tls.Config
+	CookieJar  *cookiejar.Jar
+	ForceHTTP2 bool
 }
 
 // Client is a custom HTTP client that can extract proxy information
@@ -100,6 +101,7 @@ func (c *Client) doDirectRequest(ctx context.Context, opts RequestOptions) (*Res
 			MaxIdleConnsPerHost: 10,
 			IdleConnTimeout:     90 * time.Second,
 			DisableKeepAlives:   false,
+			ForceAttemptHTTP2:   opts.ForceHTTP2,
 		},
 	}
 

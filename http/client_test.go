@@ -98,6 +98,48 @@ func TestClient_CustomTLSConfig(t *testing.T) {
 	}
 }
 
+func TestClient_DoDirectRequest_DefaultsToHTTP1(t *testing.T) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.Proto))
+	}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	defer server.Close()
+
+	client := NewClient(5*time.Second, &tls.Config{InsecureSkipVerify: true})
+	ctx := context.Background()
+
+	resp, err := client.Do(ctx, RequestOptions{Method: "GET", URL: server.URL})
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+
+	if string(resp.Body) != "HTTP/1.1" {
+		t.Errorf("Expected HTTP/1.1 when ForceHTTP2 is unset, got %s", string(resp.Body))
+	}
+}
+
+func TestClient_DoDirectRequest_ForceHTTP2(t *testing.T) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.Proto))
+	}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	defer server.Close()
+
+	client := NewClient(5*time.Second, &tls.Config{InsecureSkipVerify: true})
+	ctx := context.Background()
+
+	resp, err := client.Do(ctx, RequestOptions{Method: "GET", URL: server.URL, ForceHTTP2: true})
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+
+	if string(resp.Body) != "HTTP/2.0" {
+		t.Errorf("Expected HTTP/2.0 when ForceHTTP2 is set, got %s", string(resp.Body))
+	}
+}
+
 func TestBasicAuth(t *testing.T) {
 	result := basicAuth("user:pass")
 	expected := "dXNlcjpwYXNz" // base64 encoding of "user:pass"
